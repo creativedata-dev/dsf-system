@@ -95,7 +95,7 @@ export function DashboardShell({
 
         {permissions.includes('DRIVE_CONFIGURAR') && (
           <NavLink
-            href="/dashboard/drive"
+            href="/dashboard/configuracoes"
             label="Configurações Google Drive"
             icon={
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
