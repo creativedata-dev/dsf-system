@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
     const drive = google.drive({ version: 'v3', auth: oauth2 })
     const folder = await drive.files.create({
       requestBody: {
-        name: `DSF System — ${tenant?.nomeFantasia ?? tenantId}`,
+        name: `FarmaSign — ${tenant?.nomeFantasia ?? tenantId}`,
         mimeType: 'application/vnd.google-apps.folder',
       },
       fields: 'id',

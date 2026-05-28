@@ -6,7 +6,7 @@ import './globals.css'
 const geist = Geist({ subsets: ['latin'], variable: '--font-geist' })
 
 export const metadata: Metadata = {
-  title: 'DSF System — Gestão de Serviços Farmacêuticos',
+  title: 'FarmaSign — Gestão de Serviços Farmacêuticos',
   description: 'Emissão e gestão de Declarações de Serviços Farmacêuticos conforme ANVISA RDC 44/2009',
 }
 
