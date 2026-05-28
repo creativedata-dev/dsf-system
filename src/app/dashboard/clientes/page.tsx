@@ -28,6 +28,8 @@ interface ReceiptDsf {
   drogariaNome: string
   drogariaCnpj: string
   drogariaTelefone: string
+  drogariaLogoUrl: string | null
+  tipoImpressao: 'BOBINA_80MM' | 'FOLHA_A4'
   rtNome: string
   rtCrf: string | null
   clienteNome: string
@@ -83,12 +85,15 @@ export default function ClientesPage() {
   const [cliente, setCliente] = useState<ClienteData | null>(null)
   const [receiptDsf, setReceiptDsf] = useState<ReceiptDsf | null>(null)
 
-  /* camera */
+  /* camera / capture */
+  const [isMobile, setIsMobile] = useState(false)
   const [capturedImage, setCapturedImage] = useState<string | null>(null)
   const [cameraError, setCameraError] = useState('')
   const [uploadError, setUploadError] = useState('')
+  const [isDragOver, setIsDragOver] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [addr, setAddr] = useState<AddrForm>(BLANK_ADDR)
   const [cepLoading, setCepLoading] = useState(false)
@@ -103,6 +108,12 @@ export default function ClientesPage() {
 
   const [dsfForm, setDsfForm] = useState<DsfForm>({ tipoServico: '', observacoes: '', insumos: [] })
   const [dsfError, setDsfError] = useState('')
+
+  /* ── Detect mobile/touch device ─────────────────────────────────────────────── */
+
+  useEffect(() => {
+    setIsMobile(window.matchMedia('(pointer: coarse)').matches)
+  }, [])
 
   /* ── Camera effect (start/stop based on mode) ───────────────────────────────── */
 
@@ -333,6 +344,18 @@ export default function ClientesPage() {
       setDsfError('Erro de conexão.')
       setMode('emitting')
     }
+  }
+
+  /* ── File select (desktop drag & drop / file input) ────────────────────────── */
+
+  function handleFileSelect(file: File) {
+    if (!file.type.startsWith('image/')) return
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const result = e.target?.result as string
+      if (result) setCapturedImage(result)
+    }
+    reader.readAsDataURL(file)
   }
 
   /* ── Camera utilities ───────────────────────────────────────────────────────── */
@@ -746,7 +769,7 @@ export default function ClientesPage() {
                 {TIPO_SERVICO_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </F>
-            <F label="Anamnese e Observações">
+            <F label="Evolução Farmacêutica e Conduta Proposta">
               <textarea value={dsfForm.observacoes} onChange={e => setDsfForm(p => ({ ...p, observacoes: e.target.value }))}
                 disabled={mode === 'submitting_dsf'} rows={3}
                 placeholder="Achados clínicos, histórico relevante ou recomendações..."
@@ -813,7 +836,7 @@ export default function ClientesPage() {
             <button type="button" onClick={handleSubmitDsf} disabled={mode === 'submitting_dsf' || !dsfForm.tipoServico}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors">
               {mode === 'submitting_dsf' ? <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg> : <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>}
-              {mode === 'submitting_dsf' ? 'Emitindo DSF...' : 'Emitir DSF e Gerar PDF'}
+              {mode === 'submitting_dsf' ? 'Emitindo DSF...' : 'Emitir DSF'}
             </button>
             <button type="button" onClick={() => setMode('viewing')} disabled={mode === 'submitting_dsf'}
               className="flex-1 flex items-center justify-center px-4 py-3 bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-40 text-slate-600 text-sm font-medium rounded-xl transition-colors">
@@ -823,7 +846,7 @@ export default function ClientesPage() {
         </div>
       )}
 
-      {/* ── DSF GENERATED — Cupom térmico + ações ── */}
+      {/* ── DSF GENERATED — Documento + ações ── */}
       {mode === 'dsf_generated' && receiptDsf && (
         <div className="space-y-4">
           {/* Ações */}
@@ -831,121 +854,247 @@ export default function ClientesPage() {
             <button type="button" onClick={() => window.print()}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-slate-700 hover:bg-slate-800 text-white text-sm font-semibold rounded-xl transition-colors">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0021 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 00-1.913-.247M6.34 18H5.25A2.25 2.25 0 013 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.056 48.056 0 011.913-.247m10.5 0a48.536 48.536 0 00-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5zm-3 0h.008v.008H15V10.5z" /></svg>
-              Imprimir Cupom DSF
+              {receiptDsf.tipoImpressao === 'FOLHA_A4' ? 'Imprimir Folha A4' : 'Imprimir Cupom DSF'}
             </button>
-            <button type="button" onClick={() => setMode('dsf_scanning')}
+            <button type="button" onClick={() => { setCapturedImage(null); setMode('dsf_scanning') }}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-xl transition-colors">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" /><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" /></svg>
-              Digitalizar Cupom Assinado
+              {isMobile ? 'Fotografar Cupom Assinado' : 'Anexar Cupom Assinado'}
             </button>
           </div>
 
-          {/* Cupom térmico — visível na tela e na impressora */}
-          <div className="thermal-receipt bg-white rounded-2xl border border-slate-200 shadow-sm p-5 font-mono text-xs text-slate-900 max-w-[320px] mx-auto leading-relaxed">
-            <div className="text-center mb-3">
-              <p className="font-bold text-sm uppercase tracking-wide">{receiptDsf.drogariaNome}</p>
-              <p className="text-slate-500">CNPJ: {receiptDsf.drogariaCnpj}</p>
-              {receiptDsf.drogariaTelefone && <p className="text-slate-500">Tel: {receiptDsf.drogariaTelefone}</p>}
+          {receiptDsf.tipoImpressao === 'FOLHA_A4' ? (
+            /* ── Layout A4 — Relatório clínico ── */
+            <div className="dsf-doc bg-white rounded-2xl border border-slate-200 shadow-sm p-8 max-w-[210mm] mx-auto text-slate-900 text-sm leading-relaxed">
+              {/* Cabeçalho */}
+              <div className="flex items-start justify-between mb-6 pb-4 border-b-2 border-slate-800">
+                <div>
+                  {receiptDsf.drogariaLogoUrl
+                    ? <img src={receiptDsf.drogariaLogoUrl} alt="Logo" className="h-14 object-contain mb-2" />
+                    : <p className="text-xl font-extrabold uppercase tracking-wide">{receiptDsf.drogariaNome}</p>
+                  }
+                  <p className="text-xs text-slate-500">CNPJ: {receiptDsf.drogariaCnpj}</p>
+                  {receiptDsf.drogariaTelefone && <p className="text-xs text-slate-500">Tel: {receiptDsf.drogariaTelefone}</p>}
+                </div>
+                <div className="text-right">
+                  <p className="font-bold text-base uppercase">Declaração de Serviço Farmacêutico</p>
+                  <p className="text-slate-500 font-mono text-sm">{receiptDsf.numeroDsf}</p>
+                  <p className="text-slate-500 text-xs">{new Date(receiptDsf.dataEmissao).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                </div>
+              </div>
+
+              {/* Profissional e Paciente */}
+              <div className="grid grid-cols-2 gap-6 mb-4">
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Responsável Técnico</p>
+                  <p className="font-semibold">{receiptDsf.rtNome}</p>
+                  {receiptDsf.rtCrf && <p className="text-slate-500 text-xs">CRF: {receiptDsf.rtCrf}</p>}
+                </div>
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Paciente</p>
+                  <p className="font-semibold">{receiptDsf.clienteNome}</p>
+                  <p className="text-slate-500 text-xs">CPF: {fmtCpfDisplay(receiptDsf.clienteCpf)} | Nasc: {fmtDate(receiptDsf.clienteDataNasc)}</p>
+                  <p className="text-slate-500 text-xs">Fone: {receiptDsf.clienteTelefone}</p>
+                </div>
+              </div>
+
+              <div className="border-t border-slate-200 my-4" />
+
+              {/* Serviço */}
+              <div className="mb-4">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Serviço Prestado</p>
+                <p className="font-semibold text-base">{receiptDsf.tipoServicoLabel}</p>
+              </div>
+
+              {receiptDsf.observacoes && (
+                <div className="mb-4">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Evolução Farmacêutica e Conduta Proposta</p>
+                  <p className="whitespace-pre-wrap bg-slate-50 rounded-lg p-3 text-sm">{receiptDsf.observacoes}</p>
+                </div>
+              )}
+
+              {receiptDsf.insumos.length > 0 && (
+                <div className="mb-4">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">Insumos Utilizados</p>
+                  <table className="w-full text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-100">
+                        <th className="text-left p-2 font-semibold">Produto</th>
+                        <th className="text-left p-2 font-semibold">Lote</th>
+                        <th className="text-left p-2 font-semibold">Fabricante</th>
+                        <th className="text-left p-2 font-semibold">Validade</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {receiptDsf.insumos.map((ins, i) => (
+                        <tr key={i} className="border-t border-slate-100">
+                          <td className="p-2">{ins.nomeProduto}</td>
+                          <td className="p-2">{ins.lote}</td>
+                          <td className="p-2">{ins.fabricante}</td>
+                          <td className="p-2">{fmtDate(ins.validade)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <div className="border-t border-slate-200 my-4" />
+
+              {/* Assinaturas */}
+              <div className="grid grid-cols-2 gap-8 mt-8">
+                <div>
+                  <div className="border-b border-slate-900 mb-2 mt-12" />
+                  <p className="text-xs text-center">{receiptDsf.rtNome}{receiptDsf.rtCrf ? ` — CRF ${receiptDsf.rtCrf}` : ''}</p>
+                  <p className="text-[11px] text-center text-slate-500">Profissional Responsável (CRF/UF)</p>
+                </div>
+                <div>
+                  <div className="border-b border-slate-900 mb-2 mt-12" />
+                  <p className="text-xs text-center">{receiptDsf.clienteNome}</p>
+                  <p className="text-[11px] text-center text-slate-500">Paciente / Usuário do Serviço</p>
+                </div>
+              </div>
+
+              <div className="border-t border-slate-200 mt-6 pt-3 text-center">
+                <p className="text-[10px] text-slate-400 leading-tight">
+                  Esta declaração constitui um registro de monitoramento de parâmetros fisiológicos/bioquímicos e triagem em saúde. Não possui fins de diagnóstico definitivo e não substitui a consulta médica ou a avaliação por profissional de saúde habilitado.
+                </p>
+                <p className="text-[10px] text-slate-400 mt-1">ANVISA RDC 44/2009 | LGPD Lei 13.709/2018</p>
+              </div>
             </div>
+          ) : (
+            /* ── Layout Bobina 80mm — Cupom térmico ── */
+            <div className="thermal-receipt bg-white rounded-2xl border border-slate-200 shadow-sm p-5 font-mono text-xs text-slate-900 max-w-[320px] mx-auto leading-relaxed">
+              <div className="text-center mb-3">
+                {receiptDsf.drogariaLogoUrl
+                  ? <img src={receiptDsf.drogariaLogoUrl} alt="Logo" className="h-12 mx-auto object-contain mb-1" />
+                  : <p className="font-bold text-sm uppercase tracking-wide">{receiptDsf.drogariaNome}</p>
+                }
+                {receiptDsf.drogariaLogoUrl && <p className="font-bold text-xs uppercase">{receiptDsf.drogariaNome}</p>}
+                <p className="text-slate-500">CNPJ: {receiptDsf.drogariaCnpj}</p>
+                {receiptDsf.drogariaTelefone && <p className="text-slate-500">Tel: {receiptDsf.drogariaTelefone}</p>}
+              </div>
 
-            <div className="border-t border-dashed border-slate-300 my-2" />
+              <div className="border-t border-dashed border-slate-300 my-2" />
 
-            <div className="text-center mb-2">
-              <p className="font-bold text-sm">DECLARAÇÃO DE SERVIÇO FARMACÊUTICO</p>
-              <p className="text-slate-500 font-bold">{receiptDsf.numeroDsf}</p>
-              <p className="text-slate-500">{new Date(receiptDsf.dataEmissao).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
-            </div>
+              <div className="text-center mb-2">
+                <p className="font-bold text-sm">DECLARAÇÃO DE SERVIÇO FARMACÊUTICO</p>
+                <p className="text-slate-500 font-bold">{receiptDsf.numeroDsf}</p>
+                <p className="text-slate-500">{new Date(receiptDsf.dataEmissao).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+              </div>
 
-            <div className="border-t border-dashed border-slate-300 my-2" />
+              <div className="border-t border-dashed border-slate-300 my-2" />
 
-            <p className="font-bold uppercase mb-1">Responsável Técnico</p>
-            <p>{receiptDsf.rtNome}</p>
-            {receiptDsf.rtCrf && <p className="text-slate-500">CRF: {receiptDsf.rtCrf}</p>}
+              <p className="font-bold uppercase mb-1">Responsável Técnico</p>
+              <p>{receiptDsf.rtNome}</p>
+              {receiptDsf.rtCrf && <p className="text-slate-500">CRF: {receiptDsf.rtCrf}</p>}
 
-            <div className="border-t border-dashed border-slate-300 my-2" />
+              <div className="border-t border-dashed border-slate-300 my-2" />
 
-            <p className="font-bold uppercase mb-1">Paciente</p>
-            <p>{receiptDsf.clienteNome}</p>
-            <p className="text-slate-500">CPF: {fmtCpfDisplay(receiptDsf.clienteCpf)}</p>
-            <p className="text-slate-500">Nasc: {fmtDate(receiptDsf.clienteDataNasc)}</p>
-            <p className="text-slate-500">Fone: {receiptDsf.clienteTelefone}</p>
-
-            <div className="border-t border-dashed border-slate-300 my-2" />
-
-            <p className="font-bold uppercase mb-1">Serviço Prestado</p>
-            <p className="font-semibold">{receiptDsf.tipoServicoLabel}</p>
-
-            {receiptDsf.insumos.length > 0 && (
-              <>
-                <div className="border-t border-dashed border-slate-300 my-2" />
-                <p className="font-bold uppercase mb-1">Insumos Utilizados</p>
-                {receiptDsf.insumos.map((ins, i) => (
-                  <div key={i} className="mb-1">
-                    <p className="font-medium">{ins.nomeProduto}</p>
-                    <p className="text-slate-500">Lote: {ins.lote} | Fab: {ins.fabricante}</p>
-                    <p className="text-slate-500">Val: {fmtDate(ins.validade)}</p>
-                  </div>
-                ))}
-              </>
-            )}
-
-            {receiptDsf.observacoes && (
-              <>
-                <div className="border-t border-dashed border-slate-300 my-2" />
-                <p className="font-bold uppercase mb-1">Observações / Anamnese</p>
-                <p className="whitespace-pre-wrap">{receiptDsf.observacoes}</p>
-              </>
-            )}
-
-            <div className="border-t border-dashed border-slate-300 my-2" />
-
-            <div className="mt-4 mb-2">
-              <p className="font-bold uppercase mb-1">Assinatura do Responsável Técnico</p>
-              <div className="border-b border-slate-900 mt-8 mb-1" />
-              <p>{receiptDsf.rtNome}{receiptDsf.rtCrf ? ` — CRF ${receiptDsf.rtCrf}` : ''}</p>
-            </div>
-
-            <div className="mt-4 mb-2">
-              <p className="font-bold uppercase mb-1">Assinatura do Paciente / Responsável</p>
-              <div className="border-b border-slate-900 mt-8 mb-1" />
+              <p className="font-bold uppercase mb-1">Paciente</p>
               <p>{receiptDsf.clienteNome}</p>
-            </div>
+              <p className="text-slate-500">CPF: {fmtCpfDisplay(receiptDsf.clienteCpf)}</p>
+              <p className="text-slate-500">Nasc: {fmtDate(receiptDsf.clienteDataNasc)}</p>
+              <p className="text-slate-500">Fone: {receiptDsf.clienteTelefone}</p>
 
-            <div className="border-t border-dashed border-slate-300 my-3 text-center">
-              <p className="text-[10px] text-slate-500 leading-tight mt-2">
-                Este procedimento constitui monitoramento/triagem e NÃO substitui o diagnóstico médico.
-              </p>
-              <p className="text-[10px] text-slate-500 leading-tight">ANVISA RDC 44/2009 | LGPD Lei 13.709/2018</p>
-            </div>
-          </div>
+              <div className="border-t border-dashed border-slate-300 my-2" />
 
-          {/* CSS de impressão térmica 80mm */}
-          <style>{`
-            @media print {
-              body * { visibility: hidden; }
-              .thermal-receipt, .thermal-receipt * { visibility: visible; }
-              .thermal-receipt {
-                position: fixed; left: 0; top: 0;
-                width: 72mm; max-width: 72mm;
-                padding: 3mm; margin: 0;
-                font-family: 'Courier New', Courier, monospace;
-                font-size: 9pt; line-height: 1.4;
-                color: #000; background: #fff;
-                border: none; border-radius: 0; box-shadow: none;
+              <p className="font-bold uppercase mb-1">Serviço Prestado</p>
+              <p className="font-semibold">{receiptDsf.tipoServicoLabel}</p>
+
+              {receiptDsf.insumos.length > 0 && (
+                <>
+                  <div className="border-t border-dashed border-slate-300 my-2" />
+                  <p className="font-bold uppercase mb-1">Insumos Utilizados</p>
+                  {receiptDsf.insumos.map((ins, i) => (
+                    <div key={i} className="mb-1">
+                      <p className="font-medium">{ins.nomeProduto}</p>
+                      <p className="text-slate-500">Lote: {ins.lote} | Fab: {ins.fabricante}</p>
+                      <p className="text-slate-500">Val: {fmtDate(ins.validade)}</p>
+                    </div>
+                  ))}
+                </>
+              )}
+
+              {receiptDsf.observacoes && (
+                <>
+                  <div className="border-t border-dashed border-slate-300 my-2" />
+                  <p className="font-bold uppercase mb-1">Evolução Farmacêutica</p>
+                  <p className="whitespace-pre-wrap">{receiptDsf.observacoes}</p>
+                </>
+              )}
+
+              <div className="border-t border-dashed border-slate-300 my-2" />
+
+              <div className="mt-4 mb-2">
+                <p className="font-bold uppercase mb-1">Profissional Responsável (CRF/UF)</p>
+                <div className="border-b border-slate-900 mt-8 mb-1" />
+                <p>{receiptDsf.rtNome}{receiptDsf.rtCrf ? ` — CRF ${receiptDsf.rtCrf}` : ''}</p>
+              </div>
+
+              <div className="mt-4 mb-2">
+                <p className="font-bold uppercase mb-1">Paciente / Usuário do Serviço</p>
+                <div className="border-b border-slate-900 mt-8 mb-1" />
+                <p>{receiptDsf.clienteNome}</p>
+              </div>
+
+              <div className="border-t border-dashed border-slate-300 my-3 text-center">
+                <p className="text-[10px] text-slate-500 leading-tight mt-2">
+                  Esta declaração constitui um registro de monitoramento de parâmetros fisiológicos/bioquímicos e triagem em saúde. Não possui fins de diagnóstico definitivo e não substitui a consulta médica ou a avaliação por profissional de saúde habilitado.
+                </p>
+                <p className="text-[10px] text-slate-500 leading-tight mt-1">ANVISA RDC 44/2009 | LGPD Lei 13.709/2018</p>
+              </div>
+            </div>
+          )}
+
+          {/* CSS de impressão dinâmico */}
+          {receiptDsf.tipoImpressao === 'FOLHA_A4' ? (
+            <style>{`
+              @media print {
+                body * { visibility: hidden; }
+                .dsf-doc, .dsf-doc * { visibility: visible; }
+                .dsf-doc {
+                  position: fixed; left: 0; top: 0;
+                  width: 100%; padding: 15mm;
+                  font-family: Arial, sans-serif; font-size: 11pt; line-height: 1.5;
+                  color: #000; background: #fff;
+                  border: none; border-radius: 0; box-shadow: none;
+                }
+                @page { size: A4; margin: 10mm; }
               }
-              @page { size: 80mm auto; margin: 4mm; }
-            }
-          `}</style>
+            `}</style>
+          ) : (
+            <style>{`
+              @media print {
+                body * { visibility: hidden; }
+                .thermal-receipt, .thermal-receipt * { visibility: visible; }
+                .thermal-receipt {
+                  position: fixed; left: 0; top: 0;
+                  width: 72mm; max-width: 72mm;
+                  padding: 3mm; margin: 0;
+                  font-family: 'Courier New', Courier, monospace;
+                  font-size: 9pt; line-height: 1.4;
+                  color: #000; background: #fff;
+                  border: none; border-radius: 0; box-shadow: none;
+                }
+                @page { size: 80mm auto; margin: 4mm; }
+              }
+            `}</style>
+          )}
         </div>
       )}
 
-      {/* ── DSF SCANNING — Câmera de captura ── */}
+      {/* ── DSF SCANNING — Câmera (mobile) ou Drag & Drop (desktop) ── */}
       {(mode === 'dsf_scanning' || mode === 'dsf_uploading') && (
         <div className="bg-slate-900 rounded-2xl overflow-hidden">
           <div className="px-4 py-3 flex items-center justify-between border-b border-slate-700">
             <div>
-              <p className="text-white text-sm font-semibold">Digitalizar Cupom Assinado</p>
-              <p className="text-slate-400 text-xs mt-0.5">Enquadre o cupom impresso e assinado</p>
+              <p className="text-white text-sm font-semibold">
+                {isMobile ? 'Fotografar Cupom Assinado' : 'Anexar Cupom Assinado'}
+              </p>
+              <p className="text-slate-400 text-xs mt-0.5">
+                {isMobile ? 'Enquadre o cupom impresso e assinado' : 'Arraste a imagem ou clique para selecionar o arquivo'}
+              </p>
             </div>
             <button type="button" onClick={() => setMode('dsf_generated')} disabled={mode === 'dsf_uploading'}
               className="text-slate-400 hover:text-white transition-colors disabled:opacity-40">
@@ -961,15 +1110,15 @@ export default function ClientesPage() {
           )}
 
           {capturedImage ? (
-            /* Preview da imagem capturada */
+            /* Preview da imagem selecionada/capturada */
             <div className="p-4 space-y-3">
               <img src={capturedImage} alt="Cupom capturado" className="w-full rounded-xl object-contain max-h-[60vh]" />
               <div className="flex gap-3">
-                <button type="button" onClick={() => { setCapturedImage(null); setMode('dsf_scanning') }}
+                <button type="button" onClick={() => { setCapturedImage(null) }}
                   disabled={mode === 'dsf_uploading'}
                   className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-40 text-white text-sm font-medium rounded-xl transition-colors">
                   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
-                  Tirar Outra
+                  {isMobile ? 'Tirar Outra' : 'Trocar Arquivo'}
                 </button>
                 <button type="button" onClick={handleUploadSigned}
                   disabled={mode === 'dsf_uploading'}
@@ -982,8 +1131,8 @@ export default function ClientesPage() {
                 </button>
               </div>
             </div>
-          ) : (
-            /* Feed da câmera com máscara guia */
+          ) : isMobile ? (
+            /* Feed da câmera com máscara guia — mobile */
             <div className="relative">
               {cameraError ? (
                 <div className="flex flex-col items-center justify-center py-16 px-6 text-center gap-3">
@@ -994,23 +1143,19 @@ export default function ClientesPage() {
                 <>
                   <video
                     ref={videoRef}
-                    playsInline
-                    muted
-                    autoPlay
+                    playsInline muted autoPlay
                     className="w-full object-cover"
                     style={{ maxHeight: '65vh' }}
                   />
-                  {/* Máscara guia — proporção de cupom 80mm */}
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                     <div
                       className="border-2 border-white/80 rounded-sm relative"
                       style={{
-                        width: '52%',
-                        aspectRatio: '0.38',
+                        width: receiptDsf?.tipoImpressao === 'FOLHA_A4' ? '70%' : '52%',
+                        aspectRatio: receiptDsf?.tipoImpressao === 'FOLHA_A4' ? '0.71' : '0.38',
                         boxShadow: '0 0 0 9999px rgba(0,0,0,0.55)',
                       }}
                     >
-                      {/* Cantos de mira */}
                       <span className="absolute -top-px -left-px w-4 h-4 border-t-2 border-l-2 border-emerald-400" />
                       <span className="absolute -top-px -right-px w-4 h-4 border-t-2 border-r-2 border-emerald-400" />
                       <span className="absolute -bottom-px -left-px w-4 h-4 border-b-2 border-l-2 border-emerald-400" />
@@ -1022,7 +1167,6 @@ export default function ClientesPage() {
                   </p>
                 </>
               )}
-
               <div className="p-4">
                 <button type="button" onClick={capturePhoto} disabled={!!cameraError}
                   className="w-full flex items-center justify-center gap-2 px-4 py-3.5 bg-white text-slate-900 text-sm font-bold rounded-xl disabled:opacity-40 active:scale-95 transition-all">
@@ -1030,6 +1174,38 @@ export default function ClientesPage() {
                   Capturar Imagem
                 </button>
               </div>
+            </div>
+          ) : (
+            /* Drag & Drop — desktop */
+            <div className="p-6">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(f) }}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={(e) => { e.preventDefault(); setIsDragOver(true) }}
+                onDragLeave={() => setIsDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault()
+                  setIsDragOver(false)
+                  const f = e.dataTransfer.files[0]
+                  if (f) handleFileSelect(f)
+                }}
+                className={`w-full border-2 border-dashed rounded-2xl p-10 flex flex-col items-center gap-4 transition-colors ${isDragOver ? 'border-emerald-400 bg-emerald-900/20' : 'border-slate-600 hover:border-slate-400 hover:bg-slate-800/50'}`}
+              >
+                <svg className={`w-12 h-12 ${isDragOver ? 'text-emerald-400' : 'text-slate-500'}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                </svg>
+                <div className="text-center">
+                  <p className="text-white font-semibold text-sm">Arraste a foto do cupom assinado aqui</p>
+                  <p className="text-slate-400 text-xs mt-1">ou clique para selecionar — JPG, PNG</p>
+                </div>
+              </button>
             </div>
           )}
         </div>

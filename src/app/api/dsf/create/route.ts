@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
     }),
     prisma.tenant.findUnique({
       where: { id: tenantId },
-      select: { nomeFantasia: true, cnpj: true, telefone: true },
+      select: { nomeFantasia: true, cnpj: true, telefone: true, logoUrl: true, tipoImpressao: true },
     }),
   ])
 
@@ -154,6 +154,8 @@ export async function POST(request: NextRequest) {
     drogariaNome: tenant?.nomeFantasia ?? '',
     drogariaCnpj: tenant?.cnpj ?? '',
     drogariaTelefone: tenant?.telefone ?? '',
+    drogariaLogoUrl: tenant?.logoUrl ?? null,
+    tipoImpressao: tenant?.tipoImpressao ?? 'BOBINA_80MM',
     rtNome: responsavelTecnico.nome,
     rtCrf: responsavelTecnico.crf,
     clienteNome: cliente.nome,

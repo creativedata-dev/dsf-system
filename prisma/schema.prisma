@@ -25,6 +25,11 @@ enum DsfStatus {
   CANCELADA
 }
 
+enum TipoImpressao {
+  BOBINA_80MM
+  FOLHA_A4
+}
+
 enum TipoServico {
   AFERICAO_PRESSAO_ARTERIAL
   AFERICAO_TEMPERATURA
@@ -65,6 +70,8 @@ model Tenant {
   endereco        String
   telefone        String
   alvaraSanitario String
+  logoUrl         String?
+  tipoImpressao   TipoImpressao @default(BOBINA_80MM)
   ativo           Boolean  @default(true)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
