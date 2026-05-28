@@ -128,6 +128,9 @@ export default function LoginPage() {
         <p className="text-center text-xs text-slate-400 mt-5">
           Conforme ANVISA RDC 44/2009 · Dados protegidos pela LGPD
         </p>
+        <p className="text-center text-xs text-slate-300 mt-2">
+          © {new Date().getFullYear()} SynapseIQ · Todos os direitos reservados
+        </p>
 
       </div>
     </main>

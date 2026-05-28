@@ -159,6 +159,9 @@ export function DashboardShell({
       {/* Logout */}
       <div className="px-3 py-3 border-t border-slate-100 flex-shrink-0">
         <LogoutButton />
+        <p className="text-[10px] text-slate-300 text-center mt-2">
+          © {new Date().getFullYear()} SynapseIQ
+        </p>
       </div>
     </div>
   )
