@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { TIPO_SERVICO_OPTIONS } from '@/lib/tipo-servico'
 
@@ -19,13 +19,33 @@ interface EditForm { nome: string; telefone: string; email: string; rg: string }
 interface RegForm { nome: string; dataNascimento: string; sexo: string; telefone: string; email: string; rg: string }
 interface InsumoForm { _key: string; nomeProduto: string; lote: string; fabricante: string; validade: string }
 interface DsfForm { tipoServico: string; observacoes: string; insumos: InsumoForm[] }
-interface EmittedDsf { numeroDsf: string; status: string; driveFileId: string | null }
+
+interface ReceiptDsf {
+  id: string
+  numeroDsf: string
+  dataEmissao: string
+  status: string
+  drogariaNome: string
+  drogariaCnpj: string
+  drogariaTelefone: string
+  rtNome: string
+  rtCrf: string | null
+  clienteNome: string
+  clienteCpf: string
+  clienteDataNasc: string
+  clienteTelefone: string
+  tipoServico: string
+  tipoServicoLabel: string
+  observacoes: string | null
+  insumos: { nomeProduto: string; lote: string; fabricante: string; validade: string }[]
+}
 
 type Mode =
   | 'idle' | 'searching' | 'not_found'
   | 'registering' | 'registering_saving'
   | 'viewing' | 'editing' | 'saving'
-  | 'emitting' | 'submitting_dsf' | 'dsf_emitted'
+  | 'emitting' | 'submitting_dsf'
+  | 'dsf_generated' | 'dsf_scanning' | 'dsf_uploading'
 
 /* ─── Helpers ────────────────────────────────────────────────────────────────── */
 
@@ -61,7 +81,14 @@ export default function ClientesPage() {
   const [cpfInput, setCpfInput] = useState('')
   const [searchedCpf, setSearchedCpf] = useState('')
   const [cliente, setCliente] = useState<ClienteData | null>(null)
-  const [emittedDsf, setEmittedDsf] = useState<EmittedDsf | null>(null)
+  const [receiptDsf, setReceiptDsf] = useState<ReceiptDsf | null>(null)
+
+  /* camera */
+  const [capturedImage, setCapturedImage] = useState<string | null>(null)
+  const [cameraError, setCameraError] = useState('')
+  const [uploadError, setUploadError] = useState('')
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const streamRef = useRef<MediaStream | null>(null)
 
   const [addr, setAddr] = useState<AddrForm>(BLANK_ADDR)
   const [cepLoading, setCepLoading] = useState(false)
@@ -74,8 +101,45 @@ export default function ClientesPage() {
   const [regLgpd, setRegLgpd] = useState(false)
   const [regError, setRegError] = useState('')
 
-  const [dsfForm, setDsfForm] = useState<DsfForm>({ tipoServico: '', observacoes: '', insumos: [BLANK_INSUMO()] })
+  const [dsfForm, setDsfForm] = useState<DsfForm>({ tipoServico: '', observacoes: '', insumos: [] })
   const [dsfError, setDsfError] = useState('')
+
+  /* ── Camera effect (start/stop based on mode) ───────────────────────────────── */
+
+  useEffect(() => {
+    if (mode !== 'dsf_scanning') {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop())
+        streamRef.current = null
+      }
+      return
+    }
+    setCapturedImage(null)
+    setCameraError('')
+
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 2560 } },
+        })
+        streamRef.current = stream
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream
+          await videoRef.current.play().catch(() => {})
+        }
+      } catch {
+        setCameraError('Não foi possível acessar a câmera. Verifique as permissões do navegador.')
+      }
+    }
+    startCamera()
+
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop())
+        streamRef.current = null
+      }
+    }
+  }, [mode])
 
   /* ── Auto-search from query param (redirect from CpfSearch widget) ─────────── */
 
@@ -262,12 +326,53 @@ export default function ClientesPage() {
         setMode('emitting')
         return
       }
-      const dsf: EmittedDsf = await res.json()
-      setEmittedDsf(dsf)
-      setMode('dsf_emitted')
+      const data: ReceiptDsf = await res.json()
+      setReceiptDsf(data)
+      setMode('dsf_generated')
     } catch {
       setDsfError('Erro de conexão.')
       setMode('emitting')
+    }
+  }
+
+  /* ── Camera utilities ───────────────────────────────────────────────────────── */
+
+  function capturePhoto() {
+    const video = videoRef.current
+    if (!video) return
+    const canvas = document.createElement('canvas')
+    canvas.width = video.videoWidth
+    canvas.height = video.videoHeight
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    ctx.drawImage(video, 0, 0)
+    setCapturedImage(canvas.toDataURL('image/jpeg', 0.9))
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop())
+      streamRef.current = null
+    }
+  }
+
+  async function handleUploadSigned() {
+    if (!receiptDsf || !capturedImage) return
+    setUploadError('')
+    setMode('dsf_uploading')
+    try {
+      const res = await fetch('/api/dsf/upload-signed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dsfId: receiptDsf.id, imageBase64: capturedImage }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        setUploadError(err.error ?? 'Erro ao enviar imagem.')
+        setMode('dsf_scanning')
+        return
+      }
+      setMode('viewing')
+    } catch {
+      setUploadError('Erro de conexão. Tente novamente.')
+      setMode('dsf_scanning')
     }
   }
 
@@ -718,50 +823,215 @@ export default function ClientesPage() {
         </div>
       )}
 
-      {/* ── DSF EMITTED ── */}
-      {mode === 'dsf_emitted' && cliente && emittedDsf && (
-        <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm overflow-hidden">
-          <div className="bg-emerald-600 px-5 py-6 text-center">
-            <div className="w-14 h-14 bg-white/15 rounded-full flex items-center justify-center mx-auto mb-3">
-              <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
-            </div>
-            <p className="text-white font-bold text-lg">DSF Emitida com Sucesso!</p>
-            <p className="text-emerald-100 text-sm mt-1 font-mono">{emittedDsf.numeroDsf}</p>
+      {/* ── DSF GENERATED — Cupom térmico + ações ── */}
+      {mode === 'dsf_generated' && receiptDsf && (
+        <div className="space-y-4">
+          {/* Ações */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button type="button" onClick={() => window.print()}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-slate-700 hover:bg-slate-800 text-white text-sm font-semibold rounded-xl transition-colors">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0021 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 00-1.913-.247M6.34 18H5.25A2.25 2.25 0 013 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.056 48.056 0 011.913-.247m10.5 0a48.536 48.536 0 00-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5zm-3 0h.008v.008H15V10.5z" /></svg>
+              Imprimir Cupom DSF
+            </button>
+            <button type="button" onClick={() => setMode('dsf_scanning')}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-xl transition-colors">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" /><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" /></svg>
+              Digitalizar Cupom Assinado
+            </button>
           </div>
-          <div className="p-5 space-y-3">
-            <div className="flex items-center gap-3 bg-slate-50 rounded-xl p-3">
-              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-                <span className="text-xs font-bold text-blue-700">{cliente.nome.charAt(0)}</span>
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-slate-800">{cliente.nome}</p>
-                <p className="text-xs text-slate-400 font-mono">{fmtCpfDisplay(cliente.cpf)}</p>
-              </div>
+
+          {/* Cupom térmico — visível na tela e na impressora */}
+          <div className="thermal-receipt bg-white rounded-2xl border border-slate-200 shadow-sm p-5 font-mono text-xs text-slate-900 max-w-[320px] mx-auto leading-relaxed">
+            <div className="text-center mb-3">
+              <p className="font-bold text-sm uppercase tracking-wide">{receiptDsf.drogariaNome}</p>
+              <p className="text-slate-500">CNPJ: {receiptDsf.drogariaCnpj}</p>
+              {receiptDsf.drogariaTelefone && <p className="text-slate-500">Tel: {receiptDsf.drogariaTelefone}</p>}
             </div>
-            {emittedDsf.driveFileId ? (
-              <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2.5 text-sm text-emerald-700">
-                <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" /></svg>
-                PDF salvo no Google Drive
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-sm text-amber-700">
-                <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
-                DSF registrada — Drive não configurado.
-              </div>
+
+            <div className="border-t border-dashed border-slate-300 my-2" />
+
+            <div className="text-center mb-2">
+              <p className="font-bold text-sm">DECLARAÇÃO DE SERVIÇO FARMACÊUTICO</p>
+              <p className="text-slate-500 font-bold">{receiptDsf.numeroDsf}</p>
+              <p className="text-slate-500">{new Date(receiptDsf.dataEmissao).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+            </div>
+
+            <div className="border-t border-dashed border-slate-300 my-2" />
+
+            <p className="font-bold uppercase mb-1">Responsável Técnico</p>
+            <p>{receiptDsf.rtNome}</p>
+            {receiptDsf.rtCrf && <p className="text-slate-500">CRF: {receiptDsf.rtCrf}</p>}
+
+            <div className="border-t border-dashed border-slate-300 my-2" />
+
+            <p className="font-bold uppercase mb-1">Paciente</p>
+            <p>{receiptDsf.clienteNome}</p>
+            <p className="text-slate-500">CPF: {fmtCpfDisplay(receiptDsf.clienteCpf)}</p>
+            <p className="text-slate-500">Nasc: {fmtDate(receiptDsf.clienteDataNasc)}</p>
+            <p className="text-slate-500">Fone: {receiptDsf.clienteTelefone}</p>
+
+            <div className="border-t border-dashed border-slate-300 my-2" />
+
+            <p className="font-bold uppercase mb-1">Serviço Prestado</p>
+            <p className="font-semibold">{receiptDsf.tipoServicoLabel}</p>
+
+            {receiptDsf.insumos.length > 0 && (
+              <>
+                <div className="border-t border-dashed border-slate-300 my-2" />
+                <p className="font-bold uppercase mb-1">Insumos Utilizados</p>
+                {receiptDsf.insumos.map((ins, i) => (
+                  <div key={i} className="mb-1">
+                    <p className="font-medium">{ins.nomeProduto}</p>
+                    <p className="text-slate-500">Lote: {ins.lote} | Fab: {ins.fabricante}</p>
+                    <p className="text-slate-500">Val: {fmtDate(ins.validade)}</p>
+                  </div>
+                ))}
+              </>
             )}
+
+            {receiptDsf.observacoes && (
+              <>
+                <div className="border-t border-dashed border-slate-300 my-2" />
+                <p className="font-bold uppercase mb-1">Observações / Anamnese</p>
+                <p className="whitespace-pre-wrap">{receiptDsf.observacoes}</p>
+              </>
+            )}
+
+            <div className="border-t border-dashed border-slate-300 my-2" />
+
+            <div className="mt-4 mb-2">
+              <p className="font-bold uppercase mb-1">Assinatura do Responsável Técnico</p>
+              <div className="border-b border-slate-900 mt-8 mb-1" />
+              <p>{receiptDsf.rtNome}{receiptDsf.rtCrf ? ` — CRF ${receiptDsf.rtCrf}` : ''}</p>
+            </div>
+
+            <div className="mt-4 mb-2">
+              <p className="font-bold uppercase mb-1">Assinatura do Paciente / Responsável</p>
+              <div className="border-b border-slate-900 mt-8 mb-1" />
+              <p>{receiptDsf.clienteNome}</p>
+            </div>
+
+            <div className="border-t border-dashed border-slate-300 my-3 text-center">
+              <p className="text-[10px] text-slate-500 leading-tight mt-2">
+                Este procedimento constitui monitoramento/triagem e NÃO substitui o diagnóstico médico.
+              </p>
+              <p className="text-[10px] text-slate-500 leading-tight">ANVISA RDC 44/2009 | LGPD Lei 13.709/2018</p>
+            </div>
           </div>
-          <div className="px-5 pb-5 flex flex-col sm:flex-row gap-3">
-            <button type="button" onClick={openEmit}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition-colors">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
-              Emitir Outra DSF
-            </button>
-            <button type="button" onClick={() => { setCpfInput(''); setMode('idle') }}
-              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-600 text-sm font-medium rounded-lg transition-colors">
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-              Nova Busca
+
+          {/* CSS de impressão térmica 80mm */}
+          <style>{`
+            @media print {
+              body * { visibility: hidden; }
+              .thermal-receipt, .thermal-receipt * { visibility: visible; }
+              .thermal-receipt {
+                position: fixed; left: 0; top: 0;
+                width: 72mm; max-width: 72mm;
+                padding: 3mm; margin: 0;
+                font-family: 'Courier New', Courier, monospace;
+                font-size: 9pt; line-height: 1.4;
+                color: #000; background: #fff;
+                border: none; border-radius: 0; box-shadow: none;
+              }
+              @page { size: 80mm auto; margin: 4mm; }
+            }
+          `}</style>
+        </div>
+      )}
+
+      {/* ── DSF SCANNING — Câmera de captura ── */}
+      {(mode === 'dsf_scanning' || mode === 'dsf_uploading') && (
+        <div className="bg-slate-900 rounded-2xl overflow-hidden">
+          <div className="px-4 py-3 flex items-center justify-between border-b border-slate-700">
+            <div>
+              <p className="text-white text-sm font-semibold">Digitalizar Cupom Assinado</p>
+              <p className="text-slate-400 text-xs mt-0.5">Enquadre o cupom impresso e assinado</p>
+            </div>
+            <button type="button" onClick={() => setMode('dsf_generated')} disabled={mode === 'dsf_uploading'}
+              className="text-slate-400 hover:text-white transition-colors disabled:opacity-40">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
           </div>
+
+          {uploadError && (
+            <div className="mx-4 mt-3 flex items-center gap-2 bg-red-900/50 border border-red-700 text-red-300 rounded-lg px-3 py-2 text-xs">
+              <svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
+              {uploadError}
+            </div>
+          )}
+
+          {capturedImage ? (
+            /* Preview da imagem capturada */
+            <div className="p-4 space-y-3">
+              <img src={capturedImage} alt="Cupom capturado" className="w-full rounded-xl object-contain max-h-[60vh]" />
+              <div className="flex gap-3">
+                <button type="button" onClick={() => { setCapturedImage(null); setMode('dsf_scanning') }}
+                  disabled={mode === 'dsf_uploading'}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-slate-700 hover:bg-slate-600 disabled:opacity-40 text-white text-sm font-medium rounded-xl transition-colors">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>
+                  Tirar Outra
+                </button>
+                <button type="button" onClick={handleUploadSigned}
+                  disabled={mode === 'dsf_uploading'}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors">
+                  {mode === 'dsf_uploading'
+                    ? <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
+                    : <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" /></svg>
+                  }
+                  {mode === 'dsf_uploading' ? 'Enviando...' : 'Enviar e Finalizar'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* Feed da câmera com máscara guia */
+            <div className="relative">
+              {cameraError ? (
+                <div className="flex flex-col items-center justify-center py-16 px-6 text-center gap-3">
+                  <svg className="w-10 h-10 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z" /></svg>
+                  <p className="text-slate-400 text-sm">{cameraError}</p>
+                </div>
+              ) : (
+                <>
+                  <video
+                    ref={videoRef}
+                    playsInline
+                    muted
+                    autoPlay
+                    className="w-full object-cover"
+                    style={{ maxHeight: '65vh' }}
+                  />
+                  {/* Máscara guia — proporção de cupom 80mm */}
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div
+                      className="border-2 border-white/80 rounded-sm relative"
+                      style={{
+                        width: '52%',
+                        aspectRatio: '0.38',
+                        boxShadow: '0 0 0 9999px rgba(0,0,0,0.55)',
+                      }}
+                    >
+                      {/* Cantos de mira */}
+                      <span className="absolute -top-px -left-px w-4 h-4 border-t-2 border-l-2 border-emerald-400" />
+                      <span className="absolute -top-px -right-px w-4 h-4 border-t-2 border-r-2 border-emerald-400" />
+                      <span className="absolute -bottom-px -left-px w-4 h-4 border-b-2 border-l-2 border-emerald-400" />
+                      <span className="absolute -bottom-px -right-px w-4 h-4 border-b-2 border-r-2 border-emerald-400" />
+                    </div>
+                  </div>
+                  <p className="absolute bottom-16 left-0 right-0 text-center text-xs text-white/70 px-4">
+                    Enquadre o cupom assinado dentro da área marcada
+                  </p>
+                </>
+              )}
+
+              <div className="p-4">
+                <button type="button" onClick={capturePhoto} disabled={!!cameraError}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3.5 bg-white text-slate-900 text-sm font-bold rounded-xl disabled:opacity-40 active:scale-95 transition-all">
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" /><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" /></svg>
+                  Capturar Imagem
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

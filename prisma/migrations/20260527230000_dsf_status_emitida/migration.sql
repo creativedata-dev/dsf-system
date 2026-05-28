@@ -1,0 +1,2 @@
+-- Rename DsfStatus enum value EM_ANDAMENTO -> EMITIDA
+ALTER TYPE "DsfStatus" RENAME VALUE 'EM_ANDAMENTO' TO 'EMITIDA';

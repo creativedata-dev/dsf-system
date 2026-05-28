@@ -20,7 +20,7 @@ enum Permission {
 }
 
 enum DsfStatus {
-  EM_ANDAMENTO
+  EMITIDA
   CONCLUIDA
   CANCELADA
 }
@@ -129,7 +129,7 @@ model DSF {
   tipoServico          TipoServico
   dataEmissao          DateTime    @default(now())
   observacoes          String?
-  status               DsfStatus   @default(EM_ANDAMENTO)
+  status               DsfStatus   @default(EMITIDA)
   driveFileId          String?
   createdAt            DateTime    @default(now())
   updatedAt            DateTime    @updatedAt

@@ -12,7 +12,7 @@ export async function GET(request: Request) {
 
   const stale = await prisma.dSF.findMany({
     where: {
-      status: 'EM_ANDAMENTO',
+      status: 'EMITIDA',
       updatedAt: { lt: cutoff },
     },
     select: { id: true },

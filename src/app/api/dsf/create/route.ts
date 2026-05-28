@@ -2,15 +2,14 @@ import { NextRequest } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { AuditAcao, Permission, TipoServico } from '@/generated/prisma/client'
-import { generateDsfPdf } from '@/lib/pdf-dsf'
-import { uploadPdfToDrive } from '@/lib/drive'
+import { AuditAcao, DsfStatus, Permission, TipoServico } from '@/generated/prisma/client'
+import { TIPO_SERVICO_LABELS } from '@/lib/tipo-servico'
 
 interface InsumoInput {
   nomeProduto: string
   lote: string
   fabricante: string
-  validade: string  // ISO date string YYYY-MM-DD
+  validade: string
   quantidade?: number
 }
 
@@ -45,18 +44,22 @@ export async function POST(request: NextRequest) {
 
   const tenantId = session.user.tenantId
 
-  // ── Confirmar que o cliente pertence ao tenant ──────────────────────────────
-  const cliente = await prisma.cliente.findUnique({
-    where: { id: clienteId },
-    select: { id: true, tenantId: true, nome: true, cpf: true, dataNascimento: true, telefone: true, endereco: true },
-  })
+  const [cliente, tenant] = await Promise.all([
+    prisma.cliente.findUnique({
+      where: { id: clienteId },
+      select: { id: true, tenantId: true, nome: true, cpf: true, dataNascimento: true, sexo: true, telefone: true, endereco: true },
+    }),
+    prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { nomeFantasia: true, cnpj: true, telefone: true },
+    }),
+  ])
+
   if (!cliente || cliente.tenantId !== tenantId) {
     return Response.json({ error: 'Cliente não encontrado' }, { status: 404 })
   }
 
   // ── Responsável Técnico ─────────────────────────────────────────────────────
-  // Se o operador tem ANVISA_RELATORIOS, ele mesmo é o RT.
-  // Caso contrário, busca o primeiro farmacêutico ativo do tenant.
   let responsavelTecnico: { id: string; nome: string; crf: string | null }
 
   if (perms.includes('ANVISA_RELATORIOS')) {
@@ -75,13 +78,13 @@ export async function POST(request: NextRequest) {
     responsavelTecnico = rt
   }
 
-  // ── Número sequencial da DSF por tenant/ano ─────────────────────────────────
+  // ── Número sequencial por tenant/ano ────────────────────────────────────────
   const year = new Date().getFullYear()
   const startOfYear = new Date(year, 0, 1)
   const count = await prisma.dSF.count({ where: { tenantId, createdAt: { gte: startOfYear } } })
   const numeroDsf = `DSF-${year}-${String(count + 1).padStart(5, '0')}`
 
-  // ── Criar DSF ───────────────────────────────────────────────────────────────
+  // ── Criar DSF (status EMITIDA — aguardando digitalização) ───────────────────
   const dsf = await prisma.dSF.create({
     data: {
       tenantId,
@@ -91,13 +94,14 @@ export async function POST(request: NextRequest) {
       atendenteId: session.user.id,
       tipoServico: tipoServico as TipoServico,
       observacoes: observacoes?.trim() || null,
-      status: 'EM_ANDAMENTO',
+      status: DsfStatus.EMITIDA,
     },
   })
 
-  // ── Criar insumos ────────────────────────────────────────────────────────────
-  // createMany usa transação implícita — incompatível com NeonHttp. Usar creates paralelos.
-  if (insumos.length > 0) {
+  // ── Criar insumos (createMany incompatível com NeonHttp — creates paralelos) ─
+  const insumosCreated: { nomeProduto: string; lote: string; fabricante: string; validade: Date }[] = []
+
+  if (insumos?.length) {
     await Promise.all(
       insumos.map((ins) =>
         prisma.insumoDSF.create({
@@ -112,6 +116,14 @@ export async function POST(request: NextRequest) {
           },
         })
       )
+    )
+    insumosCreated.push(
+      ...insumos.map((ins) => ({
+        nomeProduto: ins.nomeProduto.trim(),
+        lote: ins.lote.trim(),
+        fabricante: ins.fabricante.trim(),
+        validade: new Date(ins.validade),
+      }))
     )
   }
 
@@ -133,57 +145,29 @@ export async function POST(request: NextRequest) {
     },
   })
 
-  // ── Gerar PDF + upload Drive ─────────────────────────────────────────────────
-  let driveFileId: string | null = null
-
-  try {
-    const tenant = await prisma.tenant.findUnique({
-      where: { id: tenantId },
-      select: { nomeFantasia: true, cnpj: true, telefone: true },
-    })
-
-    const insumosFull = await prisma.insumoDSF.findMany({
-      where: { dsfId: dsf.id },
-      select: { nomeProduto: true, lote: true, fabricante: true, validade: true },
-    })
-
-    const pdfBytes = await generateDsfPdf({
-      numeroDsf,
-      dataEmissao: dsf.dataEmissao,
-      drogariaNome: tenant?.nomeFantasia ?? '',
-      drogariaCnpj: tenant?.cnpj ?? '',
-      drogariaTelefone: tenant?.telefone ?? '',
-      rtNome: responsavelTecnico.nome,
-      rtCrf: responsavelTecnico.crf,
-      clienteNome: cliente.nome,
-      clienteCpf: cliente.cpf,
-      clienteDataNasc: cliente.dataNascimento,
-      clienteTelefone: cliente.telefone,
-      clienteEndereco: cliente.endereco,
-      tipoServico,
-      observacoes,
-      insumos: insumosFull.map((i) => ({
-        nomeProduto: i.nomeProduto,
-        lote: i.lote,
-        fabricante: i.fabricante,
-        validade: i.validade,
-      })),
-    })
-
-    driveFileId = await uploadPdfToDrive(tenantId, `${numeroDsf}.pdf`, pdfBytes)
-
-    if (driveFileId) {
-      await prisma.dSF.update({ where: { id: dsf.id }, data: { driveFileId, status: 'CONCLUIDA' } })
-    }
-  } catch (err) {
-    console.error('[DSF] Falha no PDF/Drive:', err)
-    // DSF já criada — falha silenciosa no upload não reverte o atendimento
-  }
-
+  // ── Retornar dados completos para cupom térmico ──────────────────────────────
   return Response.json({
     id: dsf.id,
     numeroDsf,
-    status: driveFileId ? 'CONCLUIDA' : 'EM_ANDAMENTO',
-    driveFileId,
+    dataEmissao: dsf.dataEmissao.toISOString(),
+    status: dsf.status,
+    drogariaNome: tenant?.nomeFantasia ?? '',
+    drogariaCnpj: tenant?.cnpj ?? '',
+    drogariaTelefone: tenant?.telefone ?? '',
+    rtNome: responsavelTecnico.nome,
+    rtCrf: responsavelTecnico.crf,
+    clienteNome: cliente.nome,
+    clienteCpf: cliente.cpf,
+    clienteDataNasc: cliente.dataNascimento.toISOString(),
+    clienteTelefone: cliente.telefone,
+    tipoServico,
+    tipoServicoLabel: TIPO_SERVICO_LABELS[tipoServico] ?? tipoServico,
+    observacoes: observacoes?.trim() || null,
+    insumos: insumosCreated.map((i) => ({
+      nomeProduto: i.nomeProduto,
+      lote: i.lote,
+      fabricante: i.fabricante,
+      validade: i.validade.toISOString(),
+    })),
   })
 }
