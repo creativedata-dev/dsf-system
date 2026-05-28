@@ -30,7 +30,7 @@ export default function LoginPage() {
       const perms: string[] = session?.user.permissions ?? []
       const isAdmin = perms.some((p) => ADMIN_PERMS.includes(p))
 
-      router.push(isAdmin ? '/dashboard/admin' : '/dashboard/atendimento')
+      router.push('/dashboard')
     } catch {
       setError('Erro ao conectar com o servidor. Tente novamente.')
     } finally {

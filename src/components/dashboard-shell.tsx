@@ -37,9 +37,8 @@ export function DashboardShell({
       {/* Brand + Tenant */}
       <div className="px-5 py-4 border-b border-slate-100 flex-shrink-0">
         {tenantLogoUrl ? (
-          <div className="flex flex-col items-start gap-1">
-            <img src={tenantLogoUrl} alt={tenantName} className="h-9 max-w-[160px] object-contain" />
-            <p className="text-xs text-slate-400 truncate">{tenantName}</p>
+          <div className="flex flex-col items-center gap-1">
+            <img src={tenantLogoUrl} alt={tenantName} className="h-10 max-w-[160px] object-contain" />
           </div>
         ) : (
           <div className="flex items-center gap-3">
@@ -54,22 +53,6 @@ export function DashboardShell({
             </div>
           </div>
         )}
-      </div>
-
-      {/* User info */}
-      <div className="px-4 py-3 bg-slate-50 border-b border-slate-100 flex-shrink-0">
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-            <span className="text-xs font-bold text-blue-700">
-              {userName.charAt(0).toUpperCase()}
-            </span>
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs font-semibold text-slate-800 truncate">{userName}</p>
-            <p className="text-[11px] text-slate-400 truncate">{userEmail}</p>
-            {userCrf && <p className="text-[11px] font-medium text-blue-600">{userCrf}</p>}
-          </div>
-        </div>
       </div>
 
       {/* Navigation */}
@@ -156,10 +139,22 @@ export function DashboardShell({
         )}
       </nav>
 
-      {/* Logout */}
-      <div className="px-3 py-3 border-t border-slate-100 flex-shrink-0">
+      {/* User info + Logout */}
+      <div className="px-4 py-3 border-t border-slate-100 flex-shrink-0 space-y-3">
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+            <span className="text-xs font-bold text-blue-700">
+              {userName.charAt(0).toUpperCase()}
+            </span>
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-slate-800 truncate">{userName}</p>
+            <p className="text-[11px] text-slate-400 truncate">{userEmail}</p>
+            {userCrf && <p className="text-[11px] font-medium text-blue-600">{userCrf}</p>}
+          </div>
+        </div>
         <LogoutButton />
-        <p className="text-[10px] text-slate-300 text-center mt-2">
+        <p className="text-[10px] text-slate-300 text-center">
           © {new Date().getFullYear()} SynapseIQ
         </p>
       </div>
