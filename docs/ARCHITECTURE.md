@@ -1,64 +1,242 @@
-Memorial Descritivo de Arquitetura e Plano Estratégico
-Projeto: Sistema SaaS de Gestão de DSF para Drogarias
-1. Visão Geral do Produto
-O sistema é uma plataforma SaaS (Software as a Service) Multi-tenant projetada especificamente para drogarias (iniciando a operação com a Drogaria Rio). O objetivo principal é a emissão, impressão e armazenamento de Declarações de Serviços Farmacêuticos (DSF), garantindo total conformidade com as normas regulatórias da ANVISA (RDC 44/2009) e segurança jurídica através da LGPD (Dados Sensíveis de Saúde).
+# Arquitetura â€” DSF System
 
-2. Stack Tecnológica e Infraestrutura
-A escolha da stack visa custo operacional inicial próximo de zero (infraestrutura serverless), alta escalabilidade e isolamento de dados.
+## Visao Geral
 
-Framework Principal: Next.js (App Router) — Unificando Frontend e Backend (API Routes) em TypeScript.
+SaaS multi-tenant para drogarias emitirem, armazenarem e auditarem **Declaracoes de Servicos Farmaceuticos (DSF)** em conformidade com ANVISA RDC 44/2009 e LGPD (Lei 13.709/2018).
 
-Hospedagem & Compute: Vercel (Edge/Serverless Platform).
+---
 
-Banco de Dados: Neon (PostgreSQL Serverless) com gerenciamento de conexões otimizado para Serverless.
+## Stack Tecnologica
 
-ORM: Prisma ORM.
+| Camada | Tecnologia | Versao |
+|---|---|---|
+| Framework | Next.js App Router | 16.2.6 |
+| Linguagem | TypeScript (strict) | 5.x |
+| Runtime | React | 19.2.4 |
+| ORM | Prisma | 7.8.0 |
+| Banco | Neon PostgreSQL (serverless) | â€” |
+| Adapter DB | `@prisma/adapter-neon` (HTTP) | 7.8.0 |
+| Autenticacao | NextAuth.js v4 + JWT | 4.24.x |
+| Geracao PDF | pdf-lib (server-side) | 1.17.x |
+| Armazenamento | Google Drive API v3 (por tenant) | googleapis 172 |
+| Hospedagem | Vercel (Edge/Serverless) | â€” |
+| Estilizacao | Tailwind CSS | 4.x |
 
-Armazenamento de Arquivos: Google Drive de cada Tenant via Integração OAuth 2.0 (Google Workspace / Gmail do Cliente).
+---
 
-Autenticação & RBAC: NextAuth.js ou JWT nativo com controle de acesso baseado em papéis.
+## Multi-Tenancy
 
-3. Modelo de Dados e Multi-Tenancy
-O sistema adota a estratégia de Banco de Dados Único com Esquema Compartilhado, onde o isolamento lógico é feito estritamente através da coluna tenant_id em todas as tabelas operacionais.
+Banco unico com schema compartilhado. Isolamento logico por `tenantId` em **todas** as tabelas operacionais.
 
-Níveis de Acesso (RBAC)
-SUPER_ADMIN: Gestão global de tenants, faturamento e auditoria centralizada.
+```
+Tenant
+  â””â”€â”€ User (N)
+  â””â”€â”€ Cliente (N)
+  â””â”€â”€ DSF (N)
+  â””â”€â”€ DriveCredential (1:1)
+  â””â”€â”€ AuditLog (N)
+```
 
-ADMIN: Gestão administrativa da drogaria contratante (usuários, configurações locais).
+Toda query de escrita/leitura passa pela verificacao `where: { tenantId: session.user.tenantId }` no nivel da API Route â€” nunca delegado ao frontend.
 
-SUPERVISOR: Liberação de permissões especiais, estornos e edições cadastrais.
+---
 
-ATENDENTE: Operação de balcão (cadastro de clientes e emissão de DSF).
+## PBAC â€” Permission-Based Access Control
 
-RESPONSAVEL_TECNICO: Farmacêutico responsável (obrigatório CRF para assinatura sanitária).
+Em vez de roles fixas, cada usuario tem um array de permissoes explicitamente concedidas.
 
-4. Engenharia de Armazenamento Dedicado (Google Drive por Tenant)
-Para descentralização de custos e conformidade jurídica, cada farmácia armazena seus próprios documentos.
+### Permissoes Disponiveis
 
-Fluxo: O sistema utiliza o fluxo OAuth 2.0 do Google. O Admin do estabelecimento autoriza o app (escopo drive.file).
+| Permissao | Descricao |
+|---|---|
+| `CLIENTE_BUSCAR` | Buscar pacientes por CPF no balcao |
+| `CLIENTE_CADASTRAR` | Registrar novos pacientes |
+| `DSF_EMITIR` | Emitir DSF e gerar PDF |
+| `DSF_CANCELAR` | Cancelar DSFs emitidas |
+| `ANVISA_RELATORIOS` | Acesso ao historico para fiscalizacao + assinar DSF como RT |
+| `DRIVE_CONFIGURAR` | Conectar/desconectar Google Drive do tenant |
+| `SUPER_ADMIN_GLOBAIS` | Gestao global de tenants e usuarios |
 
-Segurança: O refresh_token de cada tenant retornado pelo Google é obrigatoriamente criptografado em repouso (utilizando aes-256-gcm no Node.js) antes de ser persistido no Neon.
+### Perfis Tipicos (combinacoes)
 
-Estrutura: O sistema cria programaticamente uma pasta raiz no Drive do cliente e organiza os arquivos por lá. Os arquivos não possuem acesso público direto.
+| Perfil | Permissoes |
+|---|---|
+| Atendente de balcao | `CLIENTE_BUSCAR`, `CLIENTE_CADASTRAR`, `DSF_EMITIR` |
+| Responsavel Tecnico (farmaceutico) | + `ANVISA_RELATORIOS` |
+| Gerente / Admin | + `DSF_CANCELAR`, `DRIVE_CONFIGURAR` |
+| Super Admin SaaS | Todas |
 
-5. Governança, Auditoria e Compliance (ANVISA & LGPD)
-Como o sistema manipula dados clínicos e de anamnese, a rastreabilidade é nativa.
+### Como Funciona no JWT
 
-Trilha de Auditoria (Audit Trail): Todas as ações críticas (Login, cadastro de clientes, emissão de DSF, visualização de documentos, alteração de credenciais do Drive) disparam um registro na tabela AuditLog.
+```typescript
+// Armazenado no token JWT (NextAuth)
+token.permissions = user.permissions  // Permission[]
+token.tenantId    = user.tenantId
+token.crf         = user.crf          // farmaceutico
 
-Dados Coletados por Log: Tenant, Usuário, Ação (Enum), ID do Recurso afetado, Timestamp, IP e User-Agent.
+// Acessivel em qualquer API Route
+const session = await getServerSession(authOptions)
+const perms = session.user.permissions as string[]
+if (!perms.includes('DSF_EMITIR')) return 403
+```
 
-Disponibilização Fase 1: Os logs serão consolidados em um painel exclusivo do Super Admin, contando com paginação obrigatória baseada em cursor/limite estrito (50 registros por página) e ordenação decrescente para mitigar gargalos de performance na Vercel.
+---
 
-Requisitos RDC 44/2009: Todo registro de DSF obriga o vínculo do Responsável Técnico (CRF), número de lote e fabricante dos insumos utilizados (ex: testes rápidos, seringas).
+## Fluxo de Emissao de DSF
 
-6. Diretrizes para a Impressão Térmica (Desafio Serverless)
-Devido ao ciclo de vida efêmero das Serverless Functions na Vercel (Timeouts de 10-15s), o backend não faz conexão direta via rede com as impressoras de cupom das farmácias.
+```
+Atendente busca CPF
+    â”‚
+    â”œâ”€ Encontrado â”€â”€â–º ViewCard (confirmar dados)
+    â”‚                     â”‚
+    â”‚                     â”œâ”€ Editar dados â”€â”€â–º PUT /api/clients/update
+    â”‚                     â”‚
+    â”‚                     â””â”€ Iniciar DSF â”€â”€â–º EmitCard
+    â”‚                                            â”‚
+    â”‚                                            â””â”€ POST /api/dsf/create
+    â”‚                                                    â”‚
+    â”‚                                                    â”œâ”€ Gera PDF (pdf-lib, server-side)
+    â”‚                                                    â”œâ”€ Upload Google Drive (se configurado)
+    â”‚                                                    â””â”€ Salva no banco (sempre)
+    â”‚
+    â””â”€ Nao encontrado â”€â”€â–º NotFoundCard
+                              â”‚
+                              â””â”€ Cadastrar â”€â”€â–º RegisterCard
+                                                    â”‚
+                                                    â””â”€ POST /api/clients/register
+                                                            â”‚
+                                                            â””â”€ Vai para ViewCard
+```
 
-Estratégia: O backend processa as informações e entrega os dados estruturados em JSON, comandos ESC/POS puros ou HTML/CSS para o Frontend.
+### Logica do Responsavel Tecnico (RT)
 
-Execução: O Frontend Next.js do operador executa a rotina de impressão localmente utilizando as APIs do navegador (ex: window.print() estilizado ou integrações de hardware via WebUSB/WebSerial para comandos ESC/POS puros na impressora térmica).
+O RT assina a DSF. A API resolve assim:
 
-Próximo Passo Operacional (Para o Chat do VS Code com o Claude)
-Para iniciar o desenvolvimento do código seguindo este plano, inicialize o projeto Next.js e passe o seguinte prompt inicial para o Claude:
+1. Se o operador tem `ANVISA_RELATORIOS` â†’ ele mesmo e o RT
+2. Se nao â†’ busca o primeiro usuario ativo do tenant com `ANVISA_RELATORIOS`
+3. Se nao existe nenhum RT â†’ retorna `422 Unprocessable Entity`
 
+---
+
+## Geracao de PDF (pdf-lib, server-side)
+
+O PDF e gerado **no servidor** (nao no browser) para garantir consistencia da assinatura e do layout.
+
+- Fonte: `StandardFonts.Helvetica` (WinAnsiEncoding â€” cobre todo o portugues)
+- Formato: A4, margem 48pt
+- Secoes: Cabecalho azul, dados da drogaria + RT, dados do paciente, tipo de servico, tabela de insumos (zebra), observacoes (word-wrap), assinatura RT, rodape legal ANVISA
+- Rodape legal: *"Este procedimento constitui monitoramento/triagem e NAO substitui o diagnostico medico. Conforme ANVISA RDC 44/2009."*
+
+---
+
+## Google Drive por Tenant
+
+Cada tenant armazena os PDFs no seu proprio Google Drive, eliminando custos de storage centralizado e facilitando compliance.
+
+```
+Admin autoriza OAuth â†’ DriveCredential salvo no banco (tokens criptografados AES-256-GCM)
+Cada DSF emitida â†’ upload automatico para a pasta configurada
+```
+
+### Seguranca dos Tokens
+
+```
+Formato em disco: base64( iv[12] | tag[16] | ciphertext )
+Algoritmo: AES-256-GCM
+Chave: DRIVE_TOKEN_ENCRYPTION_KEY (64 hex chars = 32 bytes)
+```
+
+O token e renovado automaticamente (`refreshAccessToken`) antes de cada upload se estiver expirado.
+
+---
+
+## Numeracao Sequencial de DSFs
+
+Formato: `DSF-{ANO}-{SEQUENCIAL:5 digitos}` por tenant.
+
+```typescript
+const count = await prisma.dSF.count({ where: { tenantId, createdAt: { gte: startOfYear } } })
+const numeroDsf = `DSF-2026-${String(count + 1).padStart(5, '0')}`
+// Ex: DSF-2026-00001
+```
+
+Protecao contra race condition: `@@unique([tenantId, numeroDsf])` no schema.
+
+---
+
+## Auditoria (AuditLog)
+
+Todas as acoes criticas sao registradas com IP real (`x-forwarded-for`) e User-Agent.
+
+| Acao | Disparada por |
+|---|---|
+| `LOGIN` / `LOGOUT` | NextAuth callbacks |
+| `CLIENTE_CRIADO` | POST /api/clients/register |
+| `CLIENTE_ATUALIZADO` | PUT /api/clients/update |
+| `DSF_CRIADA` | POST /api/dsf/create |
+| `DSF_CONCLUIDA` | Quando driveFileId e salvo |
+| `DSF_CANCELADA` | POST /api/dsf/cancel (futuro) |
+| `DRIVE_AUTORIZADO` / `DRIVE_REVOGADO` | OAuth callback Drive (futuro) |
+| `CRON_CLEANUP_DSF` | Cron job automatico |
+
+---
+
+## Cron Job â€” Limpeza de DSFs
+
+Rota: `GET /api/cron/cleanup-dsf`  
+Autenticacao: Header `Authorization: Bearer $CRON_SECRET`  
+Finalidade: Marca como `CANCELADA` DSFs que ficaram `EM_ANDAMENTO` por mais de 24h (falha silenciosa no upload do Drive).
+
+Configurado no `vercel.json`:
+```json
+{ "crons": [{ "path": "/api/cron/cleanup-dsf", "schedule": "0 3 * * *" }] }
+```
+
+---
+
+## Estrutura de Diretorios
+
+```
+src/
+  app/
+    api/
+      auth/[...nextauth]/    NextAuth handler
+      clients/
+        search/              GET  â€” busca por CPF
+        register/            POST â€” cadastrar novo cliente
+        update/              PUT  â€” atualizar dados
+      dsf/
+        create/              POST â€” emitir DSF
+      cron/
+        cleanup-dsf/         GET  â€” job noturno
+    auth/
+      login/                 Pagina de login
+    dashboard/
+      layout.tsx             Shell com sidebar (Server Component)
+      page.tsx               Home adaptativa (admin vs atendente)
+      clientes/              Balcao de atendimento (maquina de estados)
+      anvisa/                Historico e relatorios (futuro)
+      drive/                 Configuracao Google Drive (futuro)
+      admin/                 Painel administrativo (futuro)
+  components/
+    dashboard-shell.tsx      Layout responsivo (drawer mobile / sidebar desktop)
+    nav-link.tsx             Link ativo com usePathname
+    logout-button.tsx        Botao de logout client-side
+    cpf-search.tsx           Widget de busca rapida (home)
+  lib/
+    auth.ts                  Configuracao NextAuth (PBAC callbacks)
+    prisma.ts                Singleton PrismaClient (NeonHttp)
+    tipo-servico.ts          Labels dos TipoServico (client-safe, sem Prisma)
+    pdf-dsf.ts               Geracao de PDF A4 (server-only)
+    drive.ts                 Upload para Google Drive com refresh de token
+    crypto.ts                AES-256-GCM encrypt/decrypt
+  types/
+    next-auth.d.ts           Augmentacao de tipos NextAuth
+  generated/
+    prisma/                  Cliente Prisma gerado (npx prisma generate)
+prisma/
+  schema.prisma              Schema completo
+  seed.ts                    Seed de desenvolvimento (2 tenants, 4 usuarios)
+  migrations/                Historico de migrations SQL
+docs/                        Esta documentacao
+```

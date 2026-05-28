@@ -1,0 +1,791 @@
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
+import { TIPO_SERVICO_OPTIONS } from '@/lib/tipo-servico'
+
+/* ─── Types ──────────────────────────────────────────────────────────────────── */
+
+interface ClienteData {
+  id: string; nome: string; cpf: string; rg: string | null
+  dataNascimento: string; sexo: string; telefone: string
+  email: string | null; endereco: string; updatedAt: string
+}
+interface AddrForm {
+  cep: string; logradouro: string; numero: string
+  complemento: string; bairro: string; cidade: string; uf: string
+}
+interface EditForm { nome: string; telefone: string; email: string; rg: string }
+interface RegForm { nome: string; dataNascimento: string; sexo: string; telefone: string; email: string; rg: string }
+interface InsumoForm { _key: string; nomeProduto: string; lote: string; fabricante: string; validade: string }
+interface DsfForm { tipoServico: string; observacoes: string; insumos: InsumoForm[] }
+interface EmittedDsf { numeroDsf: string; status: string; driveFileId: string | null }
+
+type Mode =
+  | 'idle' | 'searching' | 'not_found'
+  | 'registering' | 'registering_saving'
+  | 'viewing' | 'editing' | 'saving'
+  | 'emitting' | 'submitting_dsf' | 'dsf_emitted'
+
+/* ─── Helpers ────────────────────────────────────────────────────────────────── */
+
+function fmtCpf(v: string) {
+  const d = v.replace(/\D/g, '').slice(0, 11)
+  return d.replace(/(\d{3})(\d)/, '$1.$2').replace(/(\d{3})\.(\d{3})(\d)/, '$1.$2.$3').replace(/(\d{3})\.(\d{3})\.(\d{3})(\d)/, '$1.$2.$3-$4')
+}
+function fmtTel(v: string) {
+  const d = v.replace(/\D/g, '').slice(0, 11)
+  return d.length <= 10
+    ? d.replace(/(\d{2})(\d)/, '($1) $2').replace(/(\d{4})(\d)/, '$1-$2')
+    : d.replace(/(\d{2})(\d)/, '($1) $2').replace(/(\d{5})(\d)/, '$1-$2')
+}
+function fmtDate(iso: string) {
+  return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' })
+}
+function fmtCpfDisplay(cpf: string) {
+  return cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
+}
+
+/* ─── Constants ──────────────────────────────────────────────────────────────── */
+
+const BLANK_ADDR: AddrForm = { cep: '', logradouro: '', numero: '', complemento: '', bairro: '', cidade: '', uf: '' }
+const BLANK_INSUMO = (): InsumoForm => ({ _key: crypto.randomUUID(), nomeProduto: '', lote: '', fabricante: '', validade: '' })
+const BLANK_REG: RegForm = { nome: '', dataNascimento: '', sexo: '', telefone: '', email: '', rg: '' }
+
+/* ─── Page ───────────────────────────────────────────────────────────────────── */
+
+export default function ClientesPage() {
+  const searchParams = useSearchParams()
+
+  const [mode, setMode] = useState<Mode>('idle')
+  const [cpfInput, setCpfInput] = useState('')
+  const [searchedCpf, setSearchedCpf] = useState('')
+  const [cliente, setCliente] = useState<ClienteData | null>(null)
+  const [emittedDsf, setEmittedDsf] = useState<EmittedDsf | null>(null)
+
+  const [addr, setAddr] = useState<AddrForm>(BLANK_ADDR)
+  const [cepLoading, setCepLoading] = useState(false)
+  const [cepError, setCepError] = useState('')
+
+  const [editForm, setEditForm] = useState<EditForm>({ nome: '', telefone: '', email: '', rg: '' })
+  const [saveError, setSaveError] = useState('')
+
+  const [regForm, setRegForm] = useState<RegForm>(BLANK_REG)
+  const [regLgpd, setRegLgpd] = useState(false)
+  const [regError, setRegError] = useState('')
+
+  const [dsfForm, setDsfForm] = useState<DsfForm>({ tipoServico: '', observacoes: '', insumos: [BLANK_INSUMO()] })
+  const [dsfError, setDsfError] = useState('')
+
+  /* ── Auto-search from query param (redirect from CpfSearch widget) ─────────── */
+
+  useEffect(() => {
+    const cpfParam = searchParams.get('cpf')
+    if (!cpfParam || cpfParam.length < 11) return
+    const digits = cpfParam.replace(/\D/g, '')
+    if (digits.length !== 11) return
+    const formatted = digits.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
+    setCpfInput(formatted)
+    runSearch(digits)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  /* ── Search ─────────────────────────────────────────────────────────────────── */
+
+  async function runSearch(digits: string) {
+    setMode('searching')
+    try {
+      const res = await fetch(`/api/clients/search?cpf=${digits}`)
+      if (res.status === 404) {
+        setSearchedCpf(digits)
+        setMode('not_found')
+        return
+      }
+      if (!res.ok) throw new Error()
+      const data: ClienteData = await res.json()
+      setCliente(data)
+      setMode('viewing')
+    } catch {
+      setMode('idle')
+    }
+  }
+
+  async function handleSearch(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    const digits = cpfInput.replace(/\D/g, '')
+    if (digits.length < 11) return
+    await runSearch(digits)
+  }
+
+  /* ── Register ───────────────────────────────────────────────────────────────── */
+
+  function openRegister() {
+    setRegForm(BLANK_REG)
+    setAddr(BLANK_ADDR)
+    setCepError('')
+    setRegError('')
+    setRegLgpd(false)
+    setMode('registering')
+  }
+
+  async function handleSubmitReg() {
+    setRegError('')
+    if (!regForm.nome.trim() || !regForm.dataNascimento || !regForm.sexo || !regForm.telefone.trim()) {
+      setRegError('Preencha todos os campos obrigatórios.'); return
+    }
+    if (!addr.logradouro.trim() || !addr.numero.trim() || !addr.bairro.trim() || !addr.cidade.trim() || !addr.uf.trim()) {
+      setRegError('Preencha o endereço completo.'); return
+    }
+    if (!regLgpd) {
+      setRegError('O consentimento LGPD é obrigatório.'); return
+    }
+    setMode('registering_saving')
+    try {
+      const res = await fetch('/api/clients/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          cpf: searchedCpf,
+          nome: regForm.nome,
+          dataNascimento: regForm.dataNascimento,
+          sexo: regForm.sexo,
+          telefone: regForm.telefone,
+          email: regForm.email || undefined,
+          rg: regForm.rg || undefined,
+          endereco: addr,
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        setRegError(err.error ?? 'Erro ao cadastrar.')
+        setMode('registering')
+        return
+      }
+      const data: ClienteData = await res.json()
+      setCliente(data)
+      setMode('viewing')
+    } catch {
+      setRegError('Erro de conexão. Tente novamente.')
+      setMode('registering')
+    }
+  }
+
+  /* ── Edit ───────────────────────────────────────────────────────────────────── */
+
+  function openEdit() {
+    if (!cliente) return
+    setEditForm({ nome: cliente.nome, telefone: cliente.telefone, email: cliente.email ?? '', rg: cliente.rg ?? '' })
+    setAddr(BLANK_ADDR)
+    setCepError('')
+    setSaveError('')
+    setMode('editing')
+  }
+
+  async function handleSaveEdit() {
+    if (!cliente) return
+    setSaveError('')
+    const endOk = addr.cep && addr.logradouro && addr.numero && addr.bairro && addr.cidade && addr.uf
+    setMode('saving')
+    try {
+      const res = await fetch('/api/clients/update', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: cliente.id,
+          nome: editForm.nome,
+          telefone: editForm.telefone,
+          email: editForm.email || undefined,
+          rg: editForm.rg || undefined,
+          endereco: endOk ? addr : cliente.endereco,
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        setSaveError(err.error ?? 'Erro ao salvar.')
+        setMode('editing')
+        return
+      }
+      const data: ClienteData = await res.json()
+      setCliente(data)
+      setMode('viewing')
+    } catch {
+      setSaveError('Erro de conexão.')
+      setMode('editing')
+    }
+  }
+
+  /* ── ViaCEP ─────────────────────────────────────────────────────────────────── */
+
+  async function handleCepLookup() {
+    const cep = addr.cep.replace(/\D/g, '')
+    if (cep.length !== 8) return
+    setCepLoading(true)
+    setCepError('')
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`)
+      const data = await res.json()
+      if (data.erro) { setCepError('CEP não encontrado.'); return }
+      setAddr(p => ({ ...p, logradouro: data.logradouro ?? '', bairro: data.bairro ?? '', cidade: data.localidade ?? '', uf: data.uf ?? '' }))
+    } catch { setCepError('Erro ao consultar o CEP.') }
+    finally { setCepLoading(false) }
+  }
+
+  /* ── DSF ────────────────────────────────────────────────────────────────────── */
+
+  function openEmit() {
+    setDsfForm({ tipoServico: '', observacoes: '', insumos: [] })
+    setDsfError('')
+    setMode('emitting')
+  }
+
+  async function handleSubmitDsf() {
+    if (!cliente) return
+    setDsfError('')
+    if (!dsfForm.tipoServico) { setDsfError('Selecione o tipo de serviço.'); return }
+    const incompleto = dsfForm.insumos.find(i => !i.nomeProduto.trim() || !i.lote.trim() || !i.fabricante.trim() || !i.validade)
+    if (incompleto) { setDsfError('Preencha todos os campos de cada insumo.'); return }
+    setMode('submitting_dsf')
+    try {
+      const res = await fetch('/api/dsf/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          clienteId: cliente.id,
+          tipoServico: dsfForm.tipoServico,
+          observacoes: dsfForm.observacoes || undefined,
+          insumos: dsfForm.insumos.map(({ _key: _k, ...i }) => i),
+        }),
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        setDsfError(err.error ?? 'Erro ao emitir DSF.')
+        setMode('emitting')
+        return
+      }
+      const dsf: EmittedDsf = await res.json()
+      setEmittedDsf(dsf)
+      setMode('dsf_emitted')
+    } catch {
+      setDsfError('Erro de conexão.')
+      setMode('emitting')
+    }
+  }
+
+  /* ── Render ─────────────────────────────────────────────────────────────────── */
+
+  const digits = cpfInput.replace(/\D/g, '')
+
+  return (
+    <div className="p-4 sm:p-8 max-w-2xl mx-auto">
+
+      <div className="mb-6">
+        <h1 className="text-xl font-bold text-slate-900">Balcão de Atendimento</h1>
+        <p className="text-sm text-slate-500 mt-0.5">Busque o paciente pelo CPF para iniciar o atendimento</p>
+      </div>
+
+      {/* CPF search */}
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 mb-5">
+        <form onSubmit={handleSearch} className="flex gap-3">
+          <div className="relative flex-1">
+            <input
+              type="text" value={cpfInput}
+              onChange={e => { setCpfInput(fmtCpf(e.target.value)); if (mode !== 'idle') setMode('idle') }}
+              placeholder="000.000.000-00"
+              className="w-full pl-4 pr-9 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              maxLength={14} autoComplete="off"
+            />
+            {cpfInput && (
+              <button type="button" onClick={() => { setCpfInput(''); setMode('idle') }}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+          <button type="submit" disabled={mode === 'searching' || digits.length < 11}
+            className="flex items-center gap-2 px-4 py-2.5 bg-blue-700 text-white text-sm font-medium rounded-lg hover:bg-blue-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+            {mode === 'searching'
+              ? <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
+              : <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+            }
+            Buscar
+          </button>
+        </form>
+      </div>
+
+      {/* ── NOT FOUND ── */}
+      {mode === 'not_found' && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 text-center">
+          <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+            <svg className="w-6 h-6 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0" />
+            </svg>
+          </div>
+          <p className="text-sm font-semibold text-slate-700">CPF não cadastrado</p>
+          <p className="text-xs text-slate-400 mt-1 font-mono">{fmtCpfDisplay(searchedCpf)}</p>
+          <button
+            type="button"
+            onClick={openRegister}
+            className="mt-4 inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            Cadastrar novo cliente
+          </button>
+        </div>
+      )}
+
+      {/* ── REGISTER FORM ── */}
+      {(mode === 'registering' || mode === 'registering_saving') && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-slate-800">Novo cadastro de paciente</p>
+              <p className="text-xs text-slate-400 font-mono mt-0.5">{fmtCpfDisplay(searchedCpf)}</p>
+            </div>
+            <span className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded-full font-medium">Novo</span>
+          </div>
+
+          <div className="p-5 space-y-5">
+            {regError && (
+              <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2.5 text-sm">
+                <svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
+                {regError}
+              </div>
+            )}
+
+            {/* Dados Pessoais */}
+            <section>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Dados Pessoais</p>
+              <div className="space-y-3">
+                <F label="Nome completo *">
+                  <input type="text" value={regForm.nome} onChange={e => setRegForm(p => ({ ...p, nome: e.target.value }))}
+                    className={inp} placeholder="Nome como no documento" disabled={mode === 'registering_saving'} />
+                </F>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <F label="Data de nascimento *">
+                    <input type="date" value={regForm.dataNascimento}
+                      onChange={e => setRegForm(p => ({ ...p, dataNascimento: e.target.value }))}
+                      className={inp} disabled={mode === 'registering_saving'}
+                      max={new Date().toISOString().split('T')[0]} />
+                  </F>
+                  <F label="Sexo *">
+                    <select value={regForm.sexo} onChange={e => setRegForm(p => ({ ...p, sexo: e.target.value }))}
+                      className={`${inp} appearance-none`} disabled={mode === 'registering_saving'}>
+                      <option value="">Selecione...</option>
+                      <option value="M">Masculino</option>
+                      <option value="F">Feminino</option>
+                      <option value="Outro">Outro / Não informado</option>
+                    </select>
+                  </F>
+                </div>
+              </div>
+            </section>
+
+            {/* Contato e Documento */}
+            <section>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Contato e Documento</p>
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <F label="Telefone *">
+                    <input type="text" value={regForm.telefone}
+                      onChange={e => setRegForm(p => ({ ...p, telefone: fmtTel(e.target.value) }))}
+                      className={inp} placeholder="(00) 00000-0000" maxLength={15} disabled={mode === 'registering_saving'} />
+                  </F>
+                  <F label="E-mail">
+                    <input type="email" value={regForm.email}
+                      onChange={e => setRegForm(p => ({ ...p, email: e.target.value }))}
+                      className={inp} placeholder="opcional" disabled={mode === 'registering_saving'} />
+                  </F>
+                </div>
+                <F label="RG">
+                  <input type="text" value={regForm.rg}
+                    onChange={e => setRegForm(p => ({ ...p, rg: e.target.value }))}
+                    className={inp} placeholder="opcional" disabled={mode === 'registering_saving'} />
+                </F>
+              </div>
+            </section>
+
+            {/* Endereço */}
+            <section>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Endereço *</p>
+              <div className="space-y-3">
+                <F label="CEP">
+                  <div className="flex gap-2">
+                    <input type="text" value={addr.cep}
+                      onChange={e => setAddr(p => ({ ...p, cep: e.target.value.replace(/\D/g, '').slice(0, 8) }))}
+                      onBlur={handleCepLookup} placeholder="00000000"
+                      className={`${inp} flex-1`} maxLength={8} disabled={mode === 'registering_saving'} />
+                    <button type="button" onClick={handleCepLookup}
+                      disabled={addr.cep.length !== 8 || cepLoading || mode === 'registering_saving'}
+                      className="px-3 py-2.5 border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-40">
+                      {cepLoading
+                        ? <svg className="w-4 h-4 animate-spin text-slate-500" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
+                        : <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>}
+                    </button>
+                  </div>
+                  {cepError && <p className="text-xs text-red-600 mt-1">{cepError}</p>}
+                </F>
+                <F label="Logradouro *">
+                  <input type="text" value={addr.logradouro}
+                    onChange={e => setAddr(p => ({ ...p, logradouro: e.target.value }))}
+                    className={inp} disabled={mode === 'registering_saving'} />
+                </F>
+                <div className="grid grid-cols-2 gap-3">
+                  <F label="Número *">
+                    <input type="text" value={addr.numero}
+                      onChange={e => setAddr(p => ({ ...p, numero: e.target.value }))}
+                      className={inp} disabled={mode === 'registering_saving'} />
+                  </F>
+                  <F label="Complemento">
+                    <input type="text" value={addr.complemento}
+                      onChange={e => setAddr(p => ({ ...p, complemento: e.target.value }))}
+                      placeholder="Apto, sala..." className={inp} disabled={mode === 'registering_saving'} />
+                  </F>
+                </div>
+                <F label="Bairro *">
+                  <input type="text" value={addr.bairro}
+                    onChange={e => setAddr(p => ({ ...p, bairro: e.target.value }))}
+                    className={inp} disabled={mode === 'registering_saving'} />
+                </F>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-2">
+                    <F label="Cidade *">
+                      <input type="text" value={addr.cidade}
+                        onChange={e => setAddr(p => ({ ...p, cidade: e.target.value }))}
+                        className={inp} disabled={mode === 'registering_saving'} />
+                    </F>
+                  </div>
+                  <F label="UF *">
+                    <input type="text" value={addr.uf}
+                      onChange={e => setAddr(p => ({ ...p, uf: e.target.value.toUpperCase().slice(0, 2) }))}
+                      className={inp} disabled={mode === 'registering_saving'} />
+                  </F>
+                </div>
+              </div>
+            </section>
+
+            {/* LGPD */}
+            <div className="flex items-start gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3">
+              <input id="lgpd" type="checkbox" checked={regLgpd}
+                onChange={e => setRegLgpd(e.target.checked)}
+                disabled={mode === 'registering_saving'}
+                className="mt-0.5 w-4 h-4 rounded border-slate-300 text-blue-700 focus:ring-blue-500 flex-shrink-0" />
+              <label htmlFor="lgpd" className="text-xs text-slate-600 leading-relaxed cursor-pointer">
+                <span className="font-semibold text-slate-800">Consentimento LGPD *</span> — Declaro que o cliente forneceu consentimento livre e expresso para o tratamento de seus dados pessoais e de saúde para fins de emissão da DSF, em conformidade com a Lei 13.709/2018 (LGPD).
+              </label>
+            </div>
+          </div>
+
+          <div className="px-5 pb-5 flex flex-col sm:flex-row gap-3">
+            <button type="button" onClick={handleSubmitReg}
+              disabled={mode === 'registering_saving'}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-700 hover:bg-blue-800 disabled:opacity-40 text-white text-sm font-semibold rounded-lg transition-colors">
+              {mode === 'registering_saving'
+                ? <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
+                : <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3M13.5 21H5a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v7" /></svg>}
+              {mode === 'registering_saving' ? 'Cadastrando...' : 'Cadastrar Paciente'}
+            </button>
+            <button type="button" onClick={() => setMode('not_found')}
+              disabled={mode === 'registering_saving'}
+              className="flex-1 flex items-center justify-center px-4 py-2.5 bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-40 text-slate-600 text-sm font-medium rounded-lg transition-colors">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── VIEWING ── */}
+      {mode === 'viewing' && cliente && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-blue-700 px-5 py-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-white/15 rounded-full flex items-center justify-center flex-shrink-0">
+                <span className="text-white font-bold text-base">{cliente.nome.charAt(0).toUpperCase()}</span>
+              </div>
+              <div>
+                <p className="text-white font-semibold">{cliente.nome}</p>
+                <p className="text-blue-200 text-xs font-mono mt-0.5">{fmtCpfDisplay(cliente.cpf)}</p>
+              </div>
+            </div>
+          </div>
+          <div className="p-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+              <DF label="Data de Nascimento" value={fmtDate(cliente.dataNascimento)} />
+              <DF label="Sexo" value={cliente.sexo} />
+              <DF label="Telefone" value={cliente.telefone} />
+              <DF label="E-mail" value={cliente.email ?? '—'} />
+              {cliente.rg && <DF label="RG" value={cliente.rg} />}
+              <div className="sm:col-span-2"><DF label="Endereço" value={cliente.endereco} /></div>
+            </div>
+            <p className="text-[11px] text-slate-400 mt-4">Última atualização: {new Date(cliente.updatedAt).toLocaleString('pt-BR')}</p>
+          </div>
+          <div className="px-5 pb-5 flex flex-col sm:flex-row gap-3">
+            <button type="button" onClick={openEmit}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition-colors">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+              Confirmar Dados e Iniciar DSF
+            </button>
+            <button type="button" onClick={openEdit}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-medium rounded-lg transition-colors">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" /></svg>
+              Atualizar Dados
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── EDITING ── */}
+      {(mode === 'editing' || mode === 'saving') && cliente && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold text-slate-800">Atualizar dados</p>
+              <p className="text-xs text-slate-400 font-mono mt-0.5">{fmtCpfDisplay(cliente.cpf)}</p>
+            </div>
+            <span className="text-xs bg-amber-50 text-amber-700 border border-amber-200 px-2 py-1 rounded-full font-medium">Editando</span>
+          </div>
+          <div className="p-5 space-y-5">
+            {saveError && (
+              <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2.5 text-sm">
+                <svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
+                {saveError}
+              </div>
+            )}
+            <section>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Dados pessoais</p>
+              <div className="space-y-3">
+                <F label="Nome completo *">
+                  <input type="text" value={editForm.nome} onChange={e => setEditForm(p => ({ ...p, nome: e.target.value }))} className={inp} disabled={mode === 'saving'} />
+                </F>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <F label="Telefone *">
+                    <input type="text" value={editForm.telefone} onChange={e => setEditForm(p => ({ ...p, telefone: fmtTel(e.target.value) }))} className={inp} maxLength={15} disabled={mode === 'saving'} />
+                  </F>
+                  <F label="E-mail">
+                    <input type="email" value={editForm.email} onChange={e => setEditForm(p => ({ ...p, email: e.target.value }))} className={inp} disabled={mode === 'saving'} />
+                  </F>
+                </div>
+                <F label="RG">
+                  <input type="text" value={editForm.rg} onChange={e => setEditForm(p => ({ ...p, rg: e.target.value }))} className={inp} disabled={mode === 'saving'} />
+                </F>
+              </div>
+            </section>
+            <section>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Endereço</p>
+              <p className="text-xs text-slate-400 mb-3">Atual: <span className="text-slate-600">{cliente.endereco}</span></p>
+              <div className="space-y-3">
+                <F label="CEP">
+                  <div className="flex gap-2">
+                    <input type="text" value={addr.cep} onChange={e => setAddr(p => ({ ...p, cep: e.target.value.replace(/\D/g, '').slice(0, 8) }))} onBlur={handleCepLookup} placeholder="00000000" className={`${inp} flex-1`} maxLength={8} disabled={mode === 'saving'} />
+                    <button type="button" onClick={handleCepLookup} disabled={addr.cep.length !== 8 || cepLoading || mode === 'saving'} className="px-3 py-2.5 border border-slate-300 rounded-lg hover:bg-slate-50 disabled:opacity-40">
+                      {cepLoading ? <svg className="w-4 h-4 animate-spin text-slate-500" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg> : <svg className="w-4 h-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>}
+                    </button>
+                  </div>
+                  {cepError && <p className="text-xs text-red-600 mt-1">{cepError}</p>}
+                </F>
+                <F label="Logradouro"><input type="text" value={addr.logradouro} onChange={e => setAddr(p => ({ ...p, logradouro: e.target.value }))} className={inp} disabled={mode === 'saving'} /></F>
+                <div className="grid grid-cols-2 gap-3">
+                  <F label="Número *"><input type="text" value={addr.numero} onChange={e => setAddr(p => ({ ...p, numero: e.target.value }))} className={inp} disabled={mode === 'saving'} /></F>
+                  <F label="Complemento"><input type="text" value={addr.complemento} onChange={e => setAddr(p => ({ ...p, complemento: e.target.value }))} placeholder="Apto..." className={inp} disabled={mode === 'saving'} /></F>
+                </div>
+                <F label="Bairro"><input type="text" value={addr.bairro} onChange={e => setAddr(p => ({ ...p, bairro: e.target.value }))} className={inp} disabled={mode === 'saving'} /></F>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="col-span-2"><F label="Cidade"><input type="text" value={addr.cidade} onChange={e => setAddr(p => ({ ...p, cidade: e.target.value }))} className={inp} disabled={mode === 'saving'} /></F></div>
+                  <F label="UF"><input type="text" value={addr.uf} onChange={e => setAddr(p => ({ ...p, uf: e.target.value.toUpperCase().slice(0, 2) }))} className={inp} disabled={mode === 'saving'} /></F>
+                </div>
+              </div>
+            </section>
+          </div>
+          <div className="px-5 pb-5 flex flex-col sm:flex-row gap-3">
+            <button type="button" onClick={handleSaveEdit} disabled={mode === 'saving' || !editForm.nome.trim() || !editForm.telefone.trim()}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-700 hover:bg-blue-800 disabled:opacity-40 text-white text-sm font-semibold rounded-lg transition-colors">
+              {mode === 'saving' ? <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg> : null}
+              {mode === 'saving' ? 'Salvando...' : 'Salvar Alterações'}
+            </button>
+            <button type="button" onClick={() => setMode('viewing')} disabled={mode === 'saving'}
+              className="flex-1 flex items-center justify-center px-4 py-2.5 bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-40 text-slate-600 text-sm font-medium rounded-lg transition-colors">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── EMIT DSF ── */}
+      {(mode === 'emitting' || mode === 'submitting_dsf') && cliente && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="bg-emerald-600 px-5 py-4">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 bg-white/15 rounded-full flex items-center justify-center flex-shrink-0">
+                <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+              </div>
+              <div>
+                <p className="text-white font-semibold text-sm">Nova DSF</p>
+                <p className="text-emerald-100 text-xs mt-0.5">{cliente.nome} · {fmtCpfDisplay(cliente.cpf)}</p>
+              </div>
+            </div>
+          </div>
+          <div className="p-4 sm:p-5 space-y-5">
+            {dsfError && (
+              <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 rounded-lg px-3 py-2.5 text-sm">
+                <svg className="w-4 h-4 shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
+                {dsfError}
+              </div>
+            )}
+            <F label="Tipo de Serviço *">
+              <select value={dsfForm.tipoServico} onChange={e => setDsfForm(p => ({ ...p, tipoServico: e.target.value }))}
+                disabled={mode === 'submitting_dsf'} className={`${inp} appearance-none`}>
+                <option value="">Selecione o serviço prestado...</option>
+                {TIPO_SERVICO_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </F>
+            <F label="Anamnese e Observações">
+              <textarea value={dsfForm.observacoes} onChange={e => setDsfForm(p => ({ ...p, observacoes: e.target.value }))}
+                disabled={mode === 'submitting_dsf'} rows={3}
+                placeholder="Achados clínicos, histórico relevante ou recomendações..."
+                className={`${inp} resize-none`} />
+            </F>
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Insumos Utilizados
+                    <span className="ml-1.5 normal-case font-normal text-slate-400 tracking-normal">(Opcional para aferição de parâmetros)</span>
+                  </p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">Materiais e reagentes do atendimento</p>
+                </div>
+                <button type="button" onClick={() => setDsfForm(p => ({ ...p, insumos: [...p.insumos, BLANK_INSUMO()] }))}
+                  disabled={mode === 'submitting_dsf'}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-50 disabled:opacity-40 transition-colors">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+                  Adicionar
+                </button>
+              </div>
+              <div className="space-y-3">
+                {dsfForm.insumos.length === 0 && (
+                  <div className="border border-dashed border-slate-200 rounded-xl p-4 text-center text-xs text-slate-400">
+                    Nenhum insumo adicionado — clique em &ldquo;Adicionar&rdquo; se o procedimento utilizar materiais.
+                  </div>
+                )}
+                {dsfForm.insumos.map((ins, idx) => (
+                  <div key={ins._key} className="border border-slate-200 rounded-xl p-3 bg-slate-50/50">
+                    <div className="flex items-center justify-between mb-2.5">
+                      <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Insumo {idx + 1}</span>
+                      {dsfForm.insumos.length > 1 && (
+                        <button type="button" onClick={() => setDsfForm(p => ({ ...p, insumos: p.insumos.filter(i => i._key !== ins._key) }))}
+                          disabled={mode === 'submitting_dsf'} className="text-slate-300 hover:text-red-500 transition-colors disabled:opacity-40">
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <input type="text" value={ins.nomeProduto} onChange={e => setDsfForm(p => ({ ...p, insumos: p.insumos.map(i => i._key === ins._key ? { ...i, nomeProduto: e.target.value } : i) }))}
+                        placeholder="Nome do produto / reagente" className={inp} disabled={mode === 'submitting_dsf'} />
+                      <div className="grid grid-cols-2 gap-2">
+                        <input type="text" value={ins.lote} onChange={e => setDsfForm(p => ({ ...p, insumos: p.insumos.map(i => i._key === ins._key ? { ...i, lote: e.target.value } : i) }))}
+                          placeholder="Lote" className={inp} disabled={mode === 'submitting_dsf'} />
+                        <input type="text" value={ins.fabricante} onChange={e => setDsfForm(p => ({ ...p, insumos: p.insumos.map(i => i._key === ins._key ? { ...i, fabricante: e.target.value } : i) }))}
+                          placeholder="Fabricante" className={inp} disabled={mode === 'submitting_dsf'} />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] text-slate-400 mb-1">Validade *</label>
+                        <input type="date" value={ins.validade} onChange={e => setDsfForm(p => ({ ...p, insumos: p.insumos.map(i => i._key === ins._key ? { ...i, validade: e.target.value } : i) }))}
+                          className={inp} disabled={mode === 'submitting_dsf'} />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
+              <svg className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
+              <p className="text-xs text-amber-700">Este procedimento constitui monitoramento/triagem e <strong>não substitui</strong> o diagnóstico médico. Conforme ANVISA RDC 44/2009.</p>
+            </div>
+          </div>
+          <div className="px-4 sm:px-5 pb-5 flex flex-col sm:flex-row gap-3">
+            <button type="button" onClick={handleSubmitDsf} disabled={mode === 'submitting_dsf' || !dsfForm.tipoServico}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white text-sm font-semibold rounded-xl transition-colors">
+              {mode === 'submitting_dsf' ? <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg> : <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>}
+              {mode === 'submitting_dsf' ? 'Emitindo DSF...' : 'Emitir DSF e Gerar PDF'}
+            </button>
+            <button type="button" onClick={() => setMode('viewing')} disabled={mode === 'submitting_dsf'}
+              className="flex-1 flex items-center justify-center px-4 py-3 bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-40 text-slate-600 text-sm font-medium rounded-xl transition-colors">
+              Voltar aos Dados
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── DSF EMITTED ── */}
+      {mode === 'dsf_emitted' && cliente && emittedDsf && (
+        <div className="bg-white rounded-2xl border border-emerald-200 shadow-sm overflow-hidden">
+          <div className="bg-emerald-600 px-5 py-6 text-center">
+            <div className="w-14 h-14 bg-white/15 rounded-full flex items-center justify-center mx-auto mb-3">
+              <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" /></svg>
+            </div>
+            <p className="text-white font-bold text-lg">DSF Emitida com Sucesso!</p>
+            <p className="text-emerald-100 text-sm mt-1 font-mono">{emittedDsf.numeroDsf}</p>
+          </div>
+          <div className="p-5 space-y-3">
+            <div className="flex items-center gap-3 bg-slate-50 rounded-xl p-3">
+              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                <span className="text-xs font-bold text-blue-700">{cliente.nome.charAt(0)}</span>
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-slate-800">{cliente.nome}</p>
+                <p className="text-xs text-slate-400 font-mono">{fmtCpfDisplay(cliente.cpf)}</p>
+              </div>
+            </div>
+            {emittedDsf.driveFileId ? (
+              <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2.5 text-sm text-emerald-700">
+                <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" /></svg>
+                PDF salvo no Google Drive
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 text-sm text-amber-700">
+                <svg className="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" /></svg>
+                DSF registrada — Drive não configurado.
+              </div>
+            )}
+          </div>
+          <div className="px-5 pb-5 flex flex-col sm:flex-row gap-3">
+            <button type="button" onClick={openEmit}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-lg transition-colors">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" /></svg>
+              Emitir Outra DSF
+            </button>
+            <button type="button" onClick={() => { setCpfInput(''); setMode('idle') }}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-600 text-sm font-medium rounded-lg transition-colors">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+              Nova Busca
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ─── Micro-components ───────────────────────────────────────────────────────── */
+
+function F({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-slate-600 mb-1">{label}</label>
+      {children}
+    </div>
+  )
+}
+
+function DF({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="text-slate-800 mt-0.5">{value}</p>
+    </div>
+  )
+}
+
+const inp = 'w-full px-3 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-slate-50 disabled:text-slate-500 transition'

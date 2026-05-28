@@ -1,0 +1,194 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum Permission {
+  CLIENTE_BUSCAR
+  CLIENTE_CADASTRAR
+  DSF_EMITIR
+  DSF_CANCELAR
+  ANVISA_RELATORIOS
+  DRIVE_CONFIGURAR
+  SUPER_ADMIN_GLOBAIS
+}
+
+enum DsfStatus {
+  EM_ANDAMENTO
+  CONCLUIDA
+  CANCELADA
+}
+
+enum TipoServico {
+  AFERICAO_PRESSAO_ARTERIAL
+  AFERICAO_TEMPERATURA
+  GLICEMIA_CAPILAR
+  TESTE_RAPIDO_COVID19
+  TESTE_RAPIDO_DENGUE
+  TESTE_RAPIDO_INFLUENZA
+  TESTE_RAPIDO_BETA_HCG
+  TESTE_RAPIDO_PERFIL_LIPIDICO
+  ADMINISTRACAO_INJETAVEIS
+  INALACAO_NEBULIZACAO
+  PERFURACAO_LOBULO
+}
+
+enum AuditAcao {
+  LOGIN
+  LOGOUT
+  CLIENTE_CRIADO
+  CLIENTE_ATUALIZADO
+  DSF_CRIADA
+  DSF_CONCLUIDA
+  DSF_CANCELADA
+  DSF_VISUALIZADA
+  DRIVE_AUTORIZADO
+  DRIVE_REVOGADO
+  USUARIO_CRIADO
+  USUARIO_ATUALIZADO
+  CRON_CLEANUP_DSF
+}
+
+// ─── Models ──────────────────────────────────────────────────────────────────
+
+model Tenant {
+  id              String   @id @default(uuid())
+  nomeFantasia    String
+  razaoSocial     String
+  cnpj            String   @unique
+  endereco        String
+  telefone        String
+  alvaraSanitario String
+  ativo           Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  users           User[]
+  clientes        Cliente[]
+  dsfs            DSF[]
+  driveCredential DriveCredential?
+  auditLogs       AuditLog[]
+}
+
+model User {
+  id        String   @id @default(uuid())
+  tenantId  String
+  nome      String
+  email     String
+  senhaHash   String
+  permissions Permission[] @default([CLIENTE_BUSCAR, DSF_EMITIR])
+  crf         String?
+  ativo     Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant            Tenant     @relation(fields: [tenantId], references: [id])
+  dsfsComoRT        DSF[]      @relation("ResponsavelTecnico")
+  dsfsComoAtendente DSF[]      @relation("Atendente")
+  auditLogs         AuditLog[]
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+}
+
+model Cliente {
+  id                  String   @id @default(uuid())
+  tenantId            String
+  nome                String
+  cpf                 String
+  rg                  String?
+  dataNascimento      DateTime @db.Date
+  sexo                String
+  telefone            String
+  email               String?
+  endereco            String
+  consentimentoLgpdAt DateTime
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  dsfs   DSF[]
+
+  @@unique([tenantId, cpf])
+  @@index([tenantId])
+}
+
+model DSF {
+  id                   String      @id @default(uuid())
+  tenantId             String
+  numeroDsf            String
+  clienteId            String
+  responsavelTecnicoId String
+  atendenteId          String
+  tipoServico          TipoServico
+  dataEmissao          DateTime    @default(now())
+  observacoes          String?
+  status               DsfStatus   @default(EM_ANDAMENTO)
+  driveFileId          String?
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+
+  tenant             Tenant      @relation(fields: [tenantId], references: [id])
+  cliente            Cliente     @relation(fields: [clienteId], references: [id])
+  responsavelTecnico User        @relation("ResponsavelTecnico", fields: [responsavelTecnicoId], references: [id])
+  atendente          User        @relation("Atendente", fields: [atendenteId], references: [id])
+  insumos            InsumoDSF[]
+
+  @@unique([tenantId, numeroDsf])
+  @@index([tenantId])
+  @@index([tenantId, dataEmissao(sort: Desc)])  // relatório de fiscalização
+  @@index([clienteId])
+  @@index([status, updatedAt])                  // cron cleanup
+}
+
+model InsumoDSF {
+  id          String   @id @default(uuid())
+  dsfId       String
+  nomeProduto String
+  lote        String
+  fabricante  String
+  validade    DateTime @db.Date
+  quantidade  Decimal  @db.Decimal(10, 3)
+  unidade     String
+
+  dsf DSF @relation(fields: [dsfId], references: [id])
+
+  @@index([dsfId])
+}
+
+model DriveCredential {
+  id            String   @id @default(uuid())
+  tenantId      String   @unique
+  accessToken   String   // criptografado AES-256-GCM
+  refreshToken  String   // criptografado AES-256-GCM
+  tokenExpiry   DateTime
+  driveFolderId String
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+}
+
+model AuditLog {
+  id          String    @id @default(uuid())
+  tenantId    String?   // null para ações de sistema (ex: cron)
+  userId      String?   // null para ações de sistema
+  acao        AuditAcao
+  recursoTipo String
+  recursoId   String
+  ip          String
+  userAgent   String
+  createdAt   DateTime  @default(now())
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id])
+  user   User?   @relation(fields: [userId], references: [id])
+
+  @@index([tenantId, createdAt(sort: Desc)])  // painel de auditoria paginado
+  @@index([tenantId])
+}
