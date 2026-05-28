@@ -399,6 +399,7 @@ export function AdminClient({ currentUserId, isSuperAdmin }: { currentUserId: st
             onCancel={() => setShowCreate(false)}
             submitLabel="Criar Usuário"
             showTenant={isSuperAdmin}
+            isSuperAdmin={isSuperAdmin}
             showSenha
             senhaRequired
           />
@@ -424,6 +425,7 @@ export function AdminClient({ currentUserId, isSuperAdmin }: { currentUserId: st
             onCancel={() => setEditTarget(null)}
             submitLabel="Salvar Alterações"
             showTenant={false}
+            isSuperAdmin={isSuperAdmin}
             showSenha
             senhaRequired={false}
           />
@@ -460,7 +462,7 @@ type FormState = { tenantId: string; nome: string; email: string; senha: string;
 
 function UserForm({
   form, tenants, onChange, onTogglePerm, error, loading, onSubmit, onCancel,
-  submitLabel, showTenant, showSenha, senhaRequired,
+  submitLabel, showTenant, showSenha, senhaRequired, isSuperAdmin,
 }: {
   form: FormState
   tenants: TenantItem[]
@@ -474,7 +476,11 @@ function UserForm({
   showTenant: boolean
   showSenha: boolean
   senhaRequired: boolean
+  isSuperAdmin: boolean
 }) {
+  const visiblePermissions = isSuperAdmin
+    ? ALL_PERMISSIONS
+    : ALL_PERMISSIONS.filter((p) => p.value !== 'SUPER_ADMIN_GLOBAIS')
   return (
     <div className="px-6 py-5 space-y-4">
       {showTenant && (
@@ -542,7 +548,7 @@ function UserForm({
       <div>
         <label className="block text-xs font-medium text-slate-600 mb-2">Permissões</label>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {ALL_PERMISSIONS.map((p) => {
+          {visiblePermissions.map((p) => {
             const active = form.permissions.includes(p.value)
             return (
               <button
