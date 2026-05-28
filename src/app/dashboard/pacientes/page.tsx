@@ -1,11 +1,11 @@
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { redirect } from 'next/navigation'
-import { AdminClient } from './admin-client'
+import { PacientesClient } from './pacientes-client'
 
-const ADMIN_PERMS = ['SUPER_ADMIN_GLOBAIS', 'DRIVE_CONFIGURAR', 'ANVISA_RELATORIOS', 'DSF_CANCELAR']
+const ADMIN_PERMS = ['SUPER_ADMIN_GLOBAIS', 'ANVISA_RELATORIOS', 'DSF_CANCELAR', 'DRIVE_CONFIGURAR']
 
-export default async function AdminPage() {
+export default async function PacientesPage() {
   const session = await getServerSession(authOptions)
   if (!session) redirect('/auth/login')
 
@@ -14,5 +14,5 @@ export default async function AdminPage() {
 
   const isSuperAdmin = perms.includes('SUPER_ADMIN_GLOBAIS')
 
-  return <AdminClient currentUserId={session.user.id} isSuperAdmin={isSuperAdmin} />
+  return <PacientesClient isSuperAdmin={isSuperAdmin} />
 }

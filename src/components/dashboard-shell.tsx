@@ -12,6 +12,7 @@ interface DashboardShellProps {
   userEmail: string
   userCrf: string | null
   tenantName: string
+  tenantLogoUrl: string | null
   permissions: string[]
 }
 
@@ -21,6 +22,7 @@ export function DashboardShell({
   userEmail,
   userCrf,
   tenantName,
+  tenantLogoUrl,
   permissions,
 }: DashboardShellProps) {
   const [open, setOpen] = useState(false)
@@ -34,17 +36,24 @@ export function DashboardShell({
     <div className="flex flex-col h-full">
       {/* Brand + Tenant */}
       <div className="px-5 py-4 border-b border-slate-100 flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-blue-700 rounded-lg flex items-center justify-center flex-shrink-0">
-            <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-            </svg>
-          </div>
-          <div className="min-w-0">
-            <p className="text-sm font-bold text-slate-900 leading-tight">DSF System</p>
+        {tenantLogoUrl ? (
+          <div className="flex flex-col items-start gap-1">
+            <img src={tenantLogoUrl} alt={tenantName} className="h-9 max-w-[160px] object-contain" />
             <p className="text-xs text-slate-400 truncate">{tenantName}</p>
           </div>
-        </div>
+        ) : (
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-blue-700">
+              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+              </svg>
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-bold text-slate-900 leading-tight">DSF System</p>
+              <p className="text-xs text-slate-400 truncate">{tenantName}</p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* User info */}
@@ -64,57 +73,86 @@ export function DashboardShell({
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-        <p className="px-3 mb-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-          Menu
-        </p>
+      <nav className="flex-1 px-3 py-4 overflow-y-auto">
 
-        {permissions.includes('CLIENTE_BUSCAR') && (
-          <NavLink
-            href="/dashboard/clientes"
-            label="Balcão de Atendimento"
-            icon={
+        {/* ── Principal ── */}
+        <p className="px-3 mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Principal</p>
+        <div className="space-y-0.5 mb-4">
+          {(permissions.includes('ANVISA_RELATORIOS') ||
+            permissions.includes('DSF_CANCELAR') ||
+            permissions.includes('DRIVE_CONFIGURAR') ||
+            permissions.includes('SUPER_ADMIN_GLOBAIS')) && (
+            <NavLink href="/dashboard" label="Início" icon={
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
               </svg>
-            }
-          />
-        )}
+            } />
+          )}
 
-        {permissions.includes('ANVISA_RELATORIOS') && (
-          <NavLink
-            href="/dashboard/anvisa"
-            label="Histórico e Fiscalização ANVISA"
-            icon={
+          {permissions.includes('CLIENTE_BUSCAR') && (
+            <NavLink href="/dashboard/clientes" label="Emissão DSF" icon={
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
-            }
-          />
-        )}
+            } />
+          )}
 
-        {permissions.includes('DRIVE_CONFIGURAR') && (
-          <NavLink
-            href="/dashboard/configuracoes"
-            label="Configurações Google Drive"
-            icon={
+          {permissions.includes('ANVISA_RELATORIOS') && (
+            <NavLink href="/dashboard/anvisa" label="Relatório DSF" icon={
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
               </svg>
-            }
-          />
-        )}
+            } />
+          )}
 
-        {permissions.includes('SUPER_ADMIN_GLOBAIS') && (
-          <NavLink
-            href="/dashboard/saas"
-            label="Painel Global SaaS"
-            icon={
+          {(permissions.includes('SUPER_ADMIN_GLOBAIS') ||
+            permissions.includes('DRIVE_CONFIGURAR') ||
+            permissions.includes('ANVISA_RELATORIOS') ||
+            permissions.includes('DSF_CANCELAR')) && (
+            <NavLink href="/dashboard/pacientes" label="Clientes" icon={
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
-            }
-          />
+            } />
+          )}
+        </div>
+
+        {/* ── Configuração ── */}
+        {(permissions.includes('SUPER_ADMIN_GLOBAIS') ||
+          permissions.includes('DRIVE_CONFIGURAR') ||
+          permissions.includes('ANVISA_RELATORIOS') ||
+          permissions.includes('DSF_CANCELAR')) && (
+          <>
+            <p className="px-3 mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">Configuração</p>
+            <div className="space-y-0.5">
+              {(permissions.includes('SUPER_ADMIN_GLOBAIS') ||
+                permissions.includes('DRIVE_CONFIGURAR') ||
+                permissions.includes('ANVISA_RELATORIOS') ||
+                permissions.includes('DSF_CANCELAR')) && (
+                <NavLink href="/dashboard/admin" label="Usuários" icon={
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                  </svg>
+                } />
+              )}
+
+              {permissions.includes('DRIVE_CONFIGURAR') && (
+                <NavLink href="/dashboard/configuracoes" label="Google Drive" icon={
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+                  </svg>
+                } />
+              )}
+
+              {permissions.includes('SUPER_ADMIN_GLOBAIS') && (
+                <NavLink href="/dashboard/tenants" label="Estabelecimentos" icon={
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                } />
+              )}
+            </div>
+          </>
         )}
       </nav>
 

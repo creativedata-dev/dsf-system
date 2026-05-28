@@ -1,6 +1,6 @@
 # Fluxos de Usuario — DSF System
 
-## 1. Maquina de Estados — Pagina de Atendimento
+## 1. Maquina de Estados — Pagina de Emissao DSF
 
 Arquivo: `src/app/dashboard/clientes/page.tsx`
 
@@ -12,7 +12,7 @@ searching           Aguardando resposta da API de busca
 not_found           CPF nao cadastrado — opcoes: cadastrar ou buscar outro
 registering         Formulario de novo paciente (preenchimento)
 registering_saving  Aguardando POST /api/clients/register
-viewing             Ficha do paciente encontrado/cadastrado
+viewing             Ficha do paciente + historico de DSFs
 editing             Formulario de edicao de dados do paciente
 saving              Aguardando PUT /api/clients/update
 emitting            Formulario de emissao de DSF
@@ -20,323 +20,283 @@ submitting_dsf      Aguardando POST /api/dsf/create
 dsf_generated       Documento gerado — aguarda impressao e assinatura
 dsf_scanning        Captura do cupom assinado (camera ou drag & drop)
 dsf_uploading       Aguardando POST /api/dsf/upload-signed
+dsf_concluida       Tela de conclusao apos upload bem-sucedido
 ```
 
 ### Diagrama de Transicoes
 
 ```
 idle
-  │─ submit CPF ──────────────► searching
-                                    │
-                    ┌───────────────┼──────────────────┐
-                    ▼               ▼                  ▼
-                not_found        viewing            idle (erro)
-                    │               │
-        ┌───────────┤           ┌───┴──────────────────┐
-        ▼           ▼           ▼                      ▼
-  registering   idle(novo)   editing               emitting
-      │          (buscar)       │                      │
-      ▼                    ┌────┴─────┐           ┌────┴──────┐
-registering_saving         ▼         ▼            ▼           ▼
-      │                  saving   viewing     submitting_dsf  viewing
-      │                    │      (cancel)         │          (cancel)
-      ▼                    ▼                       ▼
-   viewing              viewing             dsf_generated
-                                                   │
-                                        ┌──────────┴──────────┐
-                                        ▼                     ▼
-                                    window.print()       dsf_scanning
-                                    (impressao)               │
-                                                    ┌─────────┴────────┐
-                                                    ▼                  ▼
-                                              dsf_uploading          viewing
-                                              (envio PDF)            (cancel)
-                                                    │
-                                          ┌─────────┴─────────┐
-                                          ▼                   ▼
-                                       viewing           dsf_scanning
-                                       (concluido)        (erro — retry)
+  │─ submit CPF ──► searching
+                        │
+          ┌─────────────┼──────────────┐
+          ▼             ▼              ▼
+      not_found      viewing        idle (erro)
+          │             │
+    ┌─────┤         ┌───┴──────────────────────┐
+    ▼     ▼         ▼                          ▼
+regist. idle(novo) editing                  emitting
+    │               │                          │
+    ▼           ┌───┴──┐                   ┌───┴──┐
+reg_saving    saving  viewing           sub_dsf  viewing
+    │             │                        │
+    ▼             ▼                        ▼
+ viewing        viewing               dsf_generated
+                                           │
+                                ┌──────────┴───────────┐
+                                ▼                      ▼
+                           window.print()         dsf_scanning
+                           (impressao)                 │
+                                               ┌───────┴──────────┐
+                                               ▼                  ▼
+                                         dsf_uploading          viewing
+                                               │                (cancel)
+                                       ┌───────┴──────────┐
+                                       ▼                  ▼
+                                  dsf_concluida       dsf_scanning
+                                  (tela conclusao)    (erro — retry)
+                                       │
+                              ┌────────┴────────┐
+                              ▼                 ▼
+                           viewing            idle
+                       (ver cadastro)    (novo atend.)
 ```
 
-### Variaveis de estado auxiliares
+### Variaveis de estado
 
 | Variavel | Tipo | Descricao |
 |---|---|---|
-| `cpfInput` | string | CPF digitado (com mascara visual) |
-| `searchedCpf` | string | Digitos (11 nums) da ultima busca |
-| `cliente` | ClienteData \| null | Dados do paciente encontrado/cadastrado |
-| `receiptDsf` | ReceiptDsf \| null | Payload completo retornado pelo create (usado no documento e no upload) |
-| `capturedImage` | string \| null | Data URL da foto/arquivo do cupom assinado |
-| `isMobile` | boolean | Detectado via `(pointer: coarse)` — define camera vs drag & drop |
-| `addr` | AddrForm | Formulario de endereco (compartilhado entre registering e editing) |
-| `editForm` | EditForm | Campos editaveis do paciente |
-| `regForm` | RegForm | Campos de novo paciente |
-| `dsfForm` | DsfForm | tipoServico, observacoes, insumos[] |
+| `cpfInput` | string | CPF digitado com mascara |
+| `searchedCpf` | string | 11 digitos da ultima busca |
+| `cliente` | ClienteData \| null | Dados do paciente encontrado |
+| `receiptDsf` | ReceiptDsf \| null | Payload retornado pelo create (impressao + upload) |
+| `dsfHistory` | DsfHistoryItem[] | Historico de DSFs do paciente (carregado em paralelo ao viewing) |
+| `capturedImage` | string \| null | Data URL da foto/PDF do cupom assinado |
+| `isMobile` | boolean | Detectado via `(pointer: coarse)` |
 
 ---
 
 ## 2. Fluxo de Busca e Atendimento
 
 ```
-Atendente digita CPF no campo de busca
-    │
-    └─ Submit ──► GET /api/clients/search?cpf={11 digitos}
-                        │
-            ┌───────────┼───────────────────────────┐
-            │ 200 OK    │ 404 Not Found              │ Erro
-            ▼           ▼                            ▼
-         viewing     not_found                    idle
-         (ficha)     (cadastrar?)             (form limpo)
-                        │
-              ┌─────────┤
-              ▼         ▼
-         registering   idle
-         (formulario) (busca limpa)
+Atendente digita CPF → GET /api/clients/search?cpf={digits}
+                              │
+              ┌───────────────┼──────────────────────────┐
+              │ 200           │ 404                      │ Erro
+              ▼               ▼                          ▼
+           viewing         not_found                  idle
+    + fetch /api/clients/{id}/dsfs (paralelo, sem bloquear UI)
+    + exibe historico de DSFs abaixo da ficha
 ```
 
-O widget `CpfSearch` no home redireciona para `/dashboard/clientes?cpf={digits}`.
+O widget `CpfSearch` no home redireciona para `/dashboard/clientes?cpf={digits}`.  
 A pagina detecta o query param no mount e dispara a busca automaticamente.
 
 ---
 
-## 3. Fluxo de Cadastro de Paciente
+## 3. Fluxo Hibrido de Emissao de DSF
+
+### Etapa 1 — Emissao
 
 ```
-not_found ──► [clicar "Cadastrar novo cliente"] ──► registering
+viewing → [Confirmar Dados e Iniciar DSF] → emitting
 
-Formulario:
-  - Nome completo *
-  - Data de nascimento *
-  - Sexo (M / F / Outro) *
-  - Telefone *
-  - Email (opcional)
-  - RG (opcional)
-  - Endereco (CEP com busca ViaCEP, logradouro, numero, bairro, cidade, UF) *
-  - Checkbox LGPD *
-  CPF: herdado da busca (searchedCpf)
+Formulario: tipo de servico, evolucao farmaceutica, insumos[]
 
-[Cadastrar] ──► registering_saving ──► POST /api/clients/register
-                                              │
-                              ┌───────────────┼──────────────────┐
-                              │ 201           │ 409 Duplicado    │ Outros
-                              ▼               ▼                  ▼
-                           viewing       regError            regError
+[Emitir DSF] → submitting_dsf → POST /api/dsf/create
+                                        │
+                     ┌──────────────────┼───────────────┐
+                     │ 200              │ 422 (sem RT)  │ Erro
+                     ▼                 ▼               ▼
+                dsf_generated      dsfError         dsfError
+                (status EMITIDA)
 ```
 
-### ViaCEP
+Layout do documento determinado por `Tenant.tipoImpressao`:
+- `BOBINA_80MM` — cupom termico 72mm, `@page { size: 80mm auto }`
+- `FOLHA_A4` — relatorio clinico A4 com tabela de insumos e linhas de assinatura
 
-1. Digita CEP (8 digitos) → onBlur dispara `GET viacep.com.br/ws/{cep}/json/`
-2. Preenche logradouro, bairro, cidade, UF automaticamente
-3. Usuario pode editar os campos preenchidos
+### Etapa 2 — Digitalizacao
+
+```
+dsf_generated → [Digitalizar] → dsf_scanning
+
+Captura:
+  - Mobile (pointer: coarse): camera traseira com viewfinder
+  - Desktop: drag & drop ou selecao de arquivo (JPG, PNG, PDF)
+
+[Enviar e Finalizar] → dsf_uploading → POST /api/dsf/upload-signed
+                                               │
+                                   ┌───────────┼──────────────┐
+                                   │ 200       │ Erro         │
+                                   ▼           ▼              ▼
+                              dsf_concluida  dsf_scanning  dsf_scanning
+```
+
+### O que upload-signed faz
+
+1. Recebe `{ dsfId, fileBase64 }` — imagem (JPEG/PNG) ou PDF (data URL)
+2. Se imagem: converte para PDF via pdf-lib (max largura 595pt)
+3. Se PDF: usa os bytes diretamente sem conversao
+4. Upload para pasta do tenant no Drive via `uploadPdfToDrive()`
+5. Atualiza DSF: `status = CONCLUIDA`, `driveFileId`
+6. Grava AuditLog `DSF_CONCLUIDA`
+
+### Tela de Conclusao (dsf_concluida)
+
+- Card verde com numero da DSF em destaque
+- Resumo: paciente, CPF, servico, RT, data/hora
+- Botao "Ver Cadastro do Paciente" → `viewing`
+- Botao "Novo Atendimento" → `idle` (limpa todo o estado)
 
 ---
 
-## 4. Fluxo de Edicao de Dados
+## 4. Fluxo de Cancelamento de DSF
 
 ```
-viewing ──► [Atualizar Dados] ──► editing
-
-Campos editaveis: nome *, telefone *, email, RG, endereco (opcional — so substitui se CEP informado)
-
-[Salvar] ──► saving ──► PUT /api/clients/update
-                               │
-                   ┌───────────┼──────────┐
-                   │ 200 OK    │ Erro     │
-                   ▼           ▼          ▼
-                viewing    saveError   saveError
-```
-
----
-
-## 5. Fluxo Hibrido de Emissao de DSF
-
-O fluxo e dividido em duas etapas para permitir assinatura fisica:
-
-### Etapa 1 — Emissao (cria registro, imprime documento)
-
-```
-viewing ──► [Confirmar Dados e Iniciar DSF] ──► emitting
-
-Formulario:
-  - Tipo de Servico * (11 opcoes)
-  - Evolucao Farmaceutica e Conduta Proposta (opcional, textarea)
-  - Insumos utilizados (opcional):
-      - Nome do produto, Lote, Fabricante, Validade *
-      - Multiplos insumos suportados
-      - Empty state informativo para procedimentos sem descartaveis
-
-[Emitir DSF] ──► submitting_dsf ──► POST /api/dsf/create
-                                           │
-                       ┌───────────────────┼──────────────────┐
-                       │ 200 OK            │ 422 (sem RT)     │ Erro
-                       ▼                   ▼                  ▼
-                  dsf_generated         dsfError           dsfError
-                  (status EMITIDA)
-```
-
-### Layout do documento (dsf_generated)
-
-Determinado pelo campo `tipoImpressao` do Tenant:
-
-| Valor | Layout | CSS de impressao |
-|---|---|---|
-| `BOBINA_80MM` | Cupom termico monoespaco, largura 72mm | `@page { size: 80mm auto }` |
-| `FOLHA_A4` | Relatorio clinico com grid, tabela de insumos e bloco de assinaturas | `@page { size: A4 }` |
-
-Ambos incluem: logo do tenant (ou fallback com nome em negrito), CNPJ, responsavel tecnico, paciente, servico prestado, insumos, evolucao farmaceutica, linhas de assinatura ("Profissional Responsavel (CRF/UF)" e "Paciente / Usuario do Servico") e texto legal ANVISA RDC 44/2009.
-
-### Etapa 2 — Digitalizacao (foto do cupom assinado → PDF → Drive)
-
-```
-dsf_generated ──► [Digitalizar Cupom Assinado] ──► dsf_scanning
-
-Captura adaptavel ao dispositivo:
-  - Mobile (pointer: coarse): camera traseira com viewfinder proporcional
-      - Aspecto 0.38 para cupom 80mm
-      - Aspecto 0.71 para folha A4
-  - Desktop: area de drag & drop ou selecao de arquivo (JPG, PNG)
-
-[Capturar / Selecionar] ──► preview da imagem
-
-[Enviar e Finalizar] ──► dsf_uploading ──► POST /api/dsf/upload-signed
-                                                    │
-                                        ┌───────────┼──────────────┐
-                                        │ 200 OK    │ Erro         │
-                                        ▼           ▼              ▼
-                                     viewing    dsf_scanning   dsf_scanning
-                                     (concluido) (retry)       (retry)
-```
-
-### O que o upload-signed faz
-
-1. Recebe `{ dsfId, imageBase64 }` do frontend
-2. Converte imagem para PDF via pdf-lib (embed JPEG ou PNG, page size = image size, max 595pt largura)
-3. Chama `uploadPdfToDrive(tenantId, numeroDsf-assinado.pdf, pdfBytes)`
-   - Se Drive configurado: salva na pasta do tenant, retorna `driveFileId`
-   - Se Drive nao configurado: retorna `null` com warning
-4. Atualiza DSF: `status = CONCLUIDA`, `driveFileId` (se disponivel)
-5. Grava AuditLog `DSF_CONCLUIDA`
-6. Retorna `{ status, driveFileId, warning }`
-
-### Status da DSF
-
-| Status | Significado |
-|---|---|
-| `EMITIDA` | Registro criado, aguardando digitalizacao da assinatura |
-| `CONCLUIDA` | Cupom assinado digitalizado; PDF no Drive (ou concluida sem Drive) |
-| `CANCELADA` | Cancelada manualmente ou pelo cron de limpeza |
-
-### Logica do Responsavel Tecnico
-
-```
-1. Operador possui ANVISA_RELATORIOS → ele mesmo e o RT
-2. Operador nao possui → API busca primeiro usuario ativo do tenant com ANVISA_RELATORIOS
-3. Nenhum encontrado → 422 Unprocessable Entity
-```
-
----
-
-## 6. Integracao Google Drive
-
-```
-/dashboard/configuracoes ──► [Conectar Google Drive da Farmacia]
+/dashboard/anvisa (tabela) → [Cancelar] → modal de confirmacao
     │
-    └─► GET /api/integrations/google-drive
-            │ (gera URL OAuth2, scope: drive.file, access_type: offline, prompt: consent)
-            ▼
-        Redireciona para Google (tela de consentimento)
-            │
-            └─► Google redireciona para /api/integrations/google-drive/callback?code=...
-                    │
-                    ├─ Troca code por tokens (access_token + refresh_token)
-                    ├─ Cria pasta "DSF System — {tenantNome}" no Drive
-                    ├─ Salva DriveCredential no banco (tokens cifrados AES-256-GCM)
-                    ├─ Grava AuditLog DRIVE_AUTORIZADO
-                    └─ Redireciona para /dashboard/configuracoes?drive=conectado
+    └─ [Confirmar] → POST /api/dsf/cancel { dsfId, motivo? }
+                            │
+                    DSF.status = CANCELADA
+                    DSF.observacoes = "[CANCELADA: motivo]"
+                    AuditLog DSF_CANCELADA
+```
+
+Disponivel para usuarios com `DSF_CANCELAR`. DSF ja cancelada retorna `409`.
+
+---
+
+## 5. Integracao Google Drive
+
+```
+/dashboard/configuracoes → [Conectar]
+    → GET /api/integrations/google-drive
+      (escopos: drive.file + userinfo.email)
+    → Consentimento Google
+    → GET /api/integrations/google-drive/callback?code=...
+        ├─ Troca code por tokens
+        ├─ Busca email da conta via getTokenInfo()
+        ├─ Cria pasta "DSF System — {tenantNome}" no Drive
+        ├─ Salva DriveCredential (tokens AES-256-GCM + driveEmail)
+        ├─ AuditLog DRIVE_AUTORIZADO
+        └─ redirect ?drive=conectado
 ```
 
 ### Renovacao de token
 
-`uploadPdfToDrive` (em `src/lib/drive.ts`) verifica `tokenExpiry` antes de cada upload.
-Se expirado, chama `oauth2.refreshAccessToken()` e persiste o novo `accessToken` no banco.
-Se o refresh falhar (token revogado), retorna `null` e o upload e ignorado com warning.
+`uploadPdfToDrive` verifica `tokenExpiry` antes de cada upload. Se expirado, chama `oauth2.refreshAccessToken()` e persiste o novo token. Se o refresh falhar, retorna `null` com warning (DSF concluida sem upload).
 
-### Desconexao
+### Email da conta
 
-```
-[Remover Integracao] ──► POST /api/integrations/google-drive/disconnect
-    │
-    ├─ Deleta DriveCredential do banco
-    ├─ Grava AuditLog DRIVE_REVOGADO
-    └─ DSFs futuras: concluidas sem upload (warning no frontend)
-    
-    Arquivos ja salvos no Drive: NAO sao afetados
-```
+Apos autorizacao, o email da conta Google e salvo em `DriveCredential.driveEmail` e exibido no card do dashboard. Credenciais anteriores ao campo sao preenchidas via backfill lazy na carga do dashboard.
 
 ---
 
-## 7. Fluxo de Permissoes por Perfil
+## 6. Permissoes por Perfil
 
-| Tela / Acao | Permissao necessaria |
+| Tela / Acao | Permissao |
 |---|---|
-| Buscar paciente | Qualquer autenticado |
+| Emissao DSF (balcao) | `CLIENTE_BUSCAR` + `DSF_EMITIR` |
 | Cadastrar paciente | `CLIENTE_CADASTRAR` |
-| Editar dados do paciente | Qualquer autenticado |
-| Emitir DSF | `DSF_EMITIR` |
 | Cancelar DSF | `DSF_CANCELAR` |
-| Configuracoes Drive | `DRIVE_CONFIGURAR` |
-| Historico ANVISA | `ANVISA_RELATORIOS` |
-| Painel Admin (home) | Qualquer uma das 4 acima |
+| Relatorio DSF / exportar CSV | `ANVISA_RELATORIOS` |
+| Clientes (listagem admin) | qualquer permissao admin |
+| Configurar Google Drive | `DRIVE_CONFIGURAR` |
+| Gestao de Usuarios | qualquer permissao admin |
+| Painel Global / Tenants | `SUPER_ADMIN_GLOBAIS` |
+| Dashboard (home admin) | qualquer permissao admin |
 
-O `DashboardShell` recebe `permissions[]` via Server Component e exibe apenas os itens de menu pertinentes.
-
----
-
-## 8. Fluxo de Autenticacao
-
-```
-Qualquer rota /dashboard/** sem sessao ──► redirect /auth/login
-
-/auth/login
-    │
-    └─ Submit (email + senha)
-            │
-            └─► POST /api/auth/callback/credentials (NextAuth)
-                        │
-            ┌───────────┼──────────────────────┐
-            │ Valido    │ Invalido              │
-            ▼           ▼                       ▼
-        JWT criado   Credenciais invalidas   (tenant inativo)
-        redirect /dashboard
-```
-
-- Estrategia: JWT (sem tabela de sessoes no banco)
-- Payload do JWT: `id`, `tenantId`, `permissions[]`, `crf?`
-- Expirado → NextAuth redireciona para `/auth/login` automaticamente
+**Permissoes admin:** `SUPER_ADMIN_GLOBAIS`, `ANVISA_RELATORIOS`, `DSF_CANCELAR`, `DRIVE_CONFIGURAR`
 
 ---
 
-## 9. Cron Job de Limpeza
+## 7. Sidenav por Perfil
+
+### Secao Principal
+| Item | Permissao |
+|---|---|
+| Inicio | qualquer admin |
+| Emissao DSF | `CLIENTE_BUSCAR` |
+| Relatorio DSF | `ANVISA_RELATORIOS` |
+| Clientes | qualquer admin |
+
+### Secao Configuracao
+| Item | Permissao |
+|---|---|
+| Usuarios | qualquer admin |
+| Google Drive | `DRIVE_CONFIGURAR` |
+| Estabelecimentos | `SUPER_ADMIN_GLOBAIS` |
+
+---
+
+## 8. Fluxo de Gestao de Tenants (Super Admin)
 
 ```
-Todo dia as 03:00 UTC (Vercel):
+/dashboard/tenants → tabela de todos os tenants com _count de usuarios e DSFs
 
+[Detalhes] → modal com duas abas:
+  │
+  ├─ Dados: formulario de edicao (nome, CNPJ, endereco, logo, tipo impressao)
+  │         POST /api/admin/tenants (criar)
+  │         PATCH /api/admin/tenants/{id} (editar + logo + ativar/desativar)
+  │
+  └─ Usuarios: listagem dos usuarios do tenant
+              GET /api/admin/users?tenantId={id}
+              POST /api/admin/users (criar no tenant)
+              PATCH /api/admin/users/{id} (editar / ativar / desativar)
+```
+
+### Logo do Tenant
+- Upload via browser (FileReader + Canvas)
+- Redimensionado para max 320x160px, formato WebP, qualidade 0.85
+- Salvo como base64 data URL em `Tenant.logoUrl`
+- Exibido no sidebar no lugar de "DSF System" quando disponivel
+- Exibido no documento DSF impresso
+
+---
+
+## 9. Fluxo de Autenticacao
+
+```
+Qualquer rota /dashboard/** sem sessao → redirect /auth/login
+
+/auth/login → POST /api/auth/callback/credentials (NextAuth)
+                    │
+       ┌────────────┼──────────────────────┐
+       │ Valido     │ Invalido             │ Tenant inativo
+       ▼            ▼                     ▼
+   JWT criado    Credenciais invalidas  Bloqueado
+   redirect /dashboard
+```
+
+- Estrategia: JWT (sem tabela de sessoes)
+- Payload: `id`, `tenantId`, `permissions[]`, `crf?`
+
+---
+
+## 10. Cron Job de Limpeza
+
+```
+Todo dia 03:00 UTC:
 GET /api/cron/cleanup-dsf
 Authorization: Bearer {CRON_SECRET}
     │
-    ├─ Busca DSFs com status=EMITIDA e updatedAt < agora - 24h
-    ├─ Atualiza cada uma: status='CANCELADA'  (Promise.all — sem transacao)
-    ├─ Grava AuditLog CRON_CLEANUP_DSF
-    └─ Retorna { cancelled: N }
+    ├─ DSFs status=EMITIDA com updatedAt < agora - 24h
+    ├─ status = CANCELADA (Promise.all individual, sem $transaction)
+    ├─ AuditLog CRON_CLEANUP_DSF
+    └─ { cancelled: N }
 ```
-
-Garante que DSFs `EMITIDA` ha mais de 24h (cupom nao digitalizado, atendente abandonou o fluxo) sejam encerradas automaticamente.
 
 ---
 
-## 10. Consentimento LGPD
+## 11. Restricao Critica — NeonHttp
 
-- Checkbox obrigatorio no formulario de cadastro
-- `consentimentoLgpdAt` salvo como `DateTime` no momento do cadastro
-- Sem marcacao → frontend bloqueia o envio
-- Texto exibido ao atendente declara que o paciente consentiu conforme Lei 13.709/2018
+O adaptador `PrismaNeonHttp` nao suporta transacoes interativas.
+
+**Nunca usar:**
+- `prisma.$transaction()`
+- `prisma.model.createMany()`
+- `prisma.model.updateMany()`
+
+**Sempre usar:** `Promise.all` de operacoes individuais paralelas.

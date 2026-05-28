@@ -10,16 +10,16 @@ export async function POST(request: NextRequest) {
   const session = await getServerSession(authOptions)
   if (!session) return Response.json({ error: 'Não autorizado' }, { status: 401 })
 
-  let body: { dsfId: string; imageBase64: string }
+  let body: { dsfId: string; fileBase64: string }
   try {
     body = await request.json()
   } catch {
     return Response.json({ error: 'Corpo inválido' }, { status: 400 })
   }
 
-  const { dsfId, imageBase64 } = body
-  if (!dsfId || !imageBase64) {
-    return Response.json({ error: 'dsfId e imageBase64 são obrigatórios' }, { status: 400 })
+  const { dsfId, fileBase64 } = body
+  if (!dsfId || !fileBase64) {
+    return Response.json({ error: 'dsfId e fileBase64 são obrigatórios' }, { status: 400 })
   }
 
   const tenantId = session.user.tenantId
@@ -35,38 +35,44 @@ export async function POST(request: NextRequest) {
     return Response.json({ error: 'DSF já concluída' }, { status: 409 })
   }
 
-  // ── Converter imagem base64 para PDF ─────────────────────────────────────────
   let driveFileId: string | null = null
   let pdfWarning: string | null = null
 
   try {
-    const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '')
-    const imageBuffer = Buffer.from(base64Data, 'base64')
+    const isPdf = fileBase64.startsWith('data:application/pdf')
+    let pdfBytes: Uint8Array
 
-    const pdfDoc = await PDFDocument.create()
+    if (isPdf) {
+      // PDF enviado diretamente — usar sem conversão
+      const base64Data = fileBase64.replace(/^data:application\/pdf;base64,/, '')
+      pdfBytes = new Uint8Array(Buffer.from(base64Data, 'base64'))
+    } else {
+      // Imagem — converter para PDF via pdf-lib
+      const base64Data = fileBase64.replace(/^data:image\/\w+;base64,/, '')
+      const imageBuffer = Buffer.from(base64Data, 'base64')
 
-    // Tentar JPEG primeiro, fallback PNG
-    let image
-    const isPng = imageBase64.startsWith('data:image/png')
-    try {
-      image = isPng
-        ? await pdfDoc.embedPng(imageBuffer)
-        : await pdfDoc.embedJpg(imageBuffer)
-    } catch {
-      image = await pdfDoc.embedPng(imageBuffer)
+      const pdfDoc = await PDFDocument.create()
+
+      let image
+      const isPng = fileBase64.startsWith('data:image/png')
+      try {
+        image = isPng
+          ? await pdfDoc.embedPng(imageBuffer)
+          : await pdfDoc.embedJpg(imageBuffer)
+      } catch {
+        image = await pdfDoc.embedPng(imageBuffer)
+      }
+
+      const { width: imgW, height: imgH } = image
+      const maxW = 595
+      const scale = imgW > maxW ? maxW / imgW : 1
+      const pageW = Math.round(imgW * scale)
+      const pageH = Math.round(imgH * scale)
+
+      const page = pdfDoc.addPage([pageW, pageH])
+      page.drawImage(image, { x: 0, y: 0, width: pageW, height: pageH })
+      pdfBytes = await pdfDoc.save()
     }
-
-    const { width: imgW, height: imgH } = image
-    // Normalizar: largura máxima 595pt (A4), manter aspect ratio
-    const maxW = 595
-    const scale = imgW > maxW ? maxW / imgW : 1
-    const pageW = Math.round(imgW * scale)
-    const pageH = Math.round(imgH * scale)
-
-    const page = pdfDoc.addPage([pageW, pageH])
-    page.drawImage(image, { x: 0, y: 0, width: pageW, height: pageH })
-
-    const pdfBytes = await pdfDoc.save()
 
     driveFileId = await uploadPdfToDrive(tenantId, `${dsf.numeroDsf}-assinado.pdf`, pdfBytes)
 
@@ -74,11 +80,10 @@ export async function POST(request: NextRequest) {
       pdfWarning = 'Drive não configurado — DSF concluída sem upload.'
     }
   } catch (err) {
-    console.error('[upload-signed] Erro ao gerar PDF:', err)
-    pdfWarning = 'Falha ao gerar o PDF — DSF concluída sem upload.'
+    console.error('[upload-signed] Erro ao processar arquivo:', err)
+    pdfWarning = 'Falha ao processar o arquivo — DSF concluída sem upload.'
   }
 
-  // ── Atualizar status da DSF ──────────────────────────────────────────────────
   await prisma.dSF.update({
     where: { id: dsfId },
     data: {
@@ -87,7 +92,6 @@ export async function POST(request: NextRequest) {
     },
   })
 
-  // ── Audit log ────────────────────────────────────────────────────────────────
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim()
     ?? request.headers.get('x-real-ip')
     ?? 'unknown'
@@ -105,9 +109,5 @@ export async function POST(request: NextRequest) {
     },
   })
 
-  return Response.json({
-    status: 'CONCLUIDA',
-    driveFileId,
-    warning: pdfWarning,
-  })
+  return Response.json({ status: 'CONCLUIDA', driveFileId, warning: pdfWarning })
 }

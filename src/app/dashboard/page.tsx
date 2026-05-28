@@ -2,6 +2,9 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { redirect } from 'next/navigation'
 import { Permission } from '@/generated/prisma/client'
+import { prisma } from '@/lib/prisma'
+import { decrypt } from '@/lib/crypto'
+import { google } from 'googleapis'
 import { CpfSearch } from '@/components/cpf-search'
 
 const ADMIN_PERMS: Permission[] = [
@@ -22,9 +25,9 @@ export default async function DashboardPage() {
     return (
       <div className="p-4 sm:p-8">
         <div className="max-w-2xl">
-          <h1 className="text-xl font-bold text-slate-900 mb-1">Balcão de Atendimento</h1>
+          <h1 className="text-xl font-bold text-slate-900 mb-1">Emissão DSF</h1>
           <p className="text-sm text-slate-500 mb-6">
-            Busque um cliente pelo CPF para iniciar o atendimento
+            Busque o cliente pelo CPF para iniciar o atendimento
           </p>
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-6">
             <CpfSearch />
@@ -32,6 +35,44 @@ export default async function DashboardPage() {
         </div>
       </div>
     )
+  }
+
+  const tenantId = session.user.tenantId
+  const todayStart = new Date()
+  todayStart.setHours(0, 0, 0, 0)
+
+  const [dsfHoje, totalClientes, drive] = await Promise.all([
+    prisma.dSF.count({ where: { tenantId, createdAt: { gte: todayStart } } }),
+    prisma.cliente.count({ where: { tenantId } }),
+    prisma.driveCredential.findUnique({
+      where: { tenantId },
+      select: { id: true, driveEmail: true, accessToken: true, refreshToken: true },
+    }),
+  ])
+
+  const driveConectado = drive !== null
+  let driveEmail = drive?.driveEmail ?? null
+
+  // Backfill lazy: credencial existia antes do campo driveEmail ser adicionado
+  if (drive && !driveEmail) {
+    try {
+      const oauth2 = new google.auth.OAuth2(
+        process.env.GOOGLE_CLIENT_ID,
+        process.env.GOOGLE_CLIENT_SECRET,
+      )
+      oauth2.setCredentials({
+        access_token: decrypt(drive.accessToken),
+        refresh_token: decrypt(drive.refreshToken),
+      })
+      const { token } = await oauth2.getAccessToken() // renova se expirado
+      const tokenInfo = await oauth2.getTokenInfo(token!)
+      driveEmail = tokenInfo.email ?? null
+      if (driveEmail) {
+        await prisma.driveCredential.update({ where: { tenantId }, data: { driveEmail } })
+      }
+    } catch {
+      // token sem escopo email — email aparece após reconexão
+    }
   }
 
   const today = new Date().toLocaleDateString('pt-BR', {
@@ -50,7 +91,7 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
         <MetricCard
           title="DSFs Emitidas Hoje"
-          value="0"
+          value={String(dsfHoje)}
           sub="declarações"
           color="blue"
           icon={
@@ -61,7 +102,7 @@ export default async function DashboardPage() {
         />
         <MetricCard
           title="Clientes Cadastrados"
-          value="0"
+          value={String(totalClientes)}
           sub="no sistema"
           color="indigo"
           icon={
@@ -72,9 +113,9 @@ export default async function DashboardPage() {
         />
         <MetricCard
           title="Google Drive"
-          value="—"
-          sub="Não configurado"
-          color="amber"
+          value={driveConectado ? '✓' : '—'}
+          sub={driveConectado ? (driveEmail ?? 'Conectado') : 'Não configurado'}
+          color={driveConectado ? 'green' : 'amber'}
           icon={
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
@@ -101,13 +142,14 @@ function MetricCard({
   title: string
   value: string
   sub: string
-  color: 'blue' | 'indigo' | 'amber'
+  color: 'blue' | 'indigo' | 'amber' | 'green'
   icon: React.ReactNode
 }) {
   const colors = {
     blue: 'bg-blue-50 text-blue-700',
     indigo: 'bg-indigo-50 text-indigo-700',
     amber: 'bg-amber-50 text-amber-700',
+    green: 'bg-green-50 text-green-700',
   }
 
   return (

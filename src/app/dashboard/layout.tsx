@@ -10,7 +10,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   const tenant = await prisma.tenant.findUnique({
     where: { id: session.user.tenantId },
-    select: { nomeFantasia: true },
+    select: { nomeFantasia: true, logoUrl: true },
   })
 
   return (
@@ -19,6 +19,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       userEmail={session.user.email ?? ''}
       userCrf={session.user.crf}
       tenantName={tenant?.nomeFantasia ?? '—'}
+      tenantLogoUrl={tenant?.logoUrl ?? null}
       permissions={session.user.permissions}
     >
       {children}

@@ -42,10 +42,15 @@ export async function GET(request: NextRequest) {
     oauth2.setCredentials(tokens)
 
     const tenantId = session.user.tenantId
-    const tenant = await prisma.tenant.findUnique({
-      where: { id: tenantId },
-      select: { nomeFantasia: true },
-    })
+    const [tenant, tokenInfo] = await Promise.all([
+      prisma.tenant.findUnique({
+        where: { id: tenantId },
+        select: { nomeFantasia: true },
+      }),
+      oauth2.getTokenInfo(tokens.access_token),
+    ])
+
+    const driveEmail = tokenInfo.email ?? null
 
     // Cria pasta exclusiva para este tenant no Drive
     const drive = google.drive({ version: 'v3', auth: oauth2 })
@@ -69,12 +74,14 @@ export async function GET(request: NextRequest) {
         refreshToken: encrypt(tokens.refresh_token),
         tokenExpiry,
         driveFolderId,
+        driveEmail,
       },
       update: {
         accessToken: encrypt(tokens.access_token),
         refreshToken: encrypt(tokens.refresh_token),
         tokenExpiry,
         driveFolderId,
+        driveEmail,
       },
     })
 

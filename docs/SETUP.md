@@ -118,13 +118,15 @@ npm start
    - Prod: `https://seu-dominio.vercel.app/api/integrations/google-drive/callback`
 5. Copie Client ID e Client Secret para `.env`
 
-### Escopo solicitado
+### Escopos solicitados
 
 ```
 https://www.googleapis.com/auth/drive.file
+https://www.googleapis.com/auth/userinfo.email
 ```
 
-Escopo minimo — a aplicacao so acessa arquivos que ela mesma criou.
+`drive.file` — acesso apenas a arquivos criados pela aplicacao.  
+`userinfo.email` — exibe o email da conta Google conectada no dashboard do tenant.
 
 ### Fluxo OAuth na aplicacao
 
@@ -187,10 +189,12 @@ src/
       cron/                 Limpeza automatica de DSFs abandonadas
     auth/                   Paginas publicas (login)
     dashboard/
-      clientes/             Balcao de atendimento (fluxo completo)
+      clientes/             Emissao DSF (balcao — fluxo completo)
+      anvisa/               Relatorio DSF — historico paginado, filtros, CSV, cancelamento
+      pacientes/            Listagem admin de clientes com historico de DSFs
+      admin/                Gestao de usuarios (tenant admin e super admin)
+      tenants/              Painel Global SaaS — gestao de tenants
       configuracoes/        Integracao Google Drive
-      anvisa/               Historico e relatorios (futuro)
-      admin/                Gestao de usuarios (futuro)
   components/               Componentes reutilizaveis
 docs/                       Esta documentacao
 ```

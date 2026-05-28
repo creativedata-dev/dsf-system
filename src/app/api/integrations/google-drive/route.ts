@@ -21,7 +21,10 @@ export async function GET(request: NextRequest) {
   const authUrl = oauth2.generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent',       // garante refresh_token mesmo que já autorizado antes
-    scope: ['https://www.googleapis.com/auth/drive.file'],
+    scope: [
+      'https://www.googleapis.com/auth/drive.file',
+      'https://www.googleapis.com/auth/userinfo.email',
+    ],
   })
 
   return NextResponse.redirect(authUrl)

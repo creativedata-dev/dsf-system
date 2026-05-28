@@ -57,6 +57,8 @@ enum AuditAcao {
   DRIVE_REVOGADO
   USUARIO_CRIADO
   USUARIO_ATUALIZADO
+  TENANT_CRIADO
+  TENANT_ATUALIZADO
   CRON_CLEANUP_DSF
 }
 
@@ -176,6 +178,7 @@ model DriveCredential {
   refreshToken  String   // criptografado AES-256-GCM
   tokenExpiry   DateTime
   driveFolderId String
+  driveEmail    String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 

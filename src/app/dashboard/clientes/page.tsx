@@ -19,6 +19,12 @@ interface EditForm { nome: string; telefone: string; email: string; rg: string }
 interface RegForm { nome: string; dataNascimento: string; sexo: string; telefone: string; email: string; rg: string }
 interface InsumoForm { _key: string; nomeProduto: string; lote: string; fabricante: string; validade: string }
 interface DsfForm { tipoServico: string; observacoes: string; insumos: InsumoForm[] }
+interface DsfHistoryItem {
+  id: string; numeroDsf: string; tipoServico: string; tipoServicoLabel: string
+  dataEmissao: string; status: 'EMITIDA' | 'CONCLUIDA' | 'CANCELADA'
+  driveFileId: string | null; observacoes: string | null
+  rtNome: string; rtCrf: string | null
+}
 
 interface ReceiptDsf {
   id: string
@@ -47,7 +53,7 @@ type Mode =
   | 'registering' | 'registering_saving'
   | 'viewing' | 'editing' | 'saving'
   | 'emitting' | 'submitting_dsf'
-  | 'dsf_generated' | 'dsf_scanning' | 'dsf_uploading'
+  | 'dsf_generated' | 'dsf_scanning' | 'dsf_uploading' | 'dsf_concluida'
 
 /* ─── Helpers ────────────────────────────────────────────────────────────────── */
 
@@ -84,6 +90,8 @@ export default function ClientesPage() {
   const [searchedCpf, setSearchedCpf] = useState('')
   const [cliente, setCliente] = useState<ClienteData | null>(null)
   const [receiptDsf, setReceiptDsf] = useState<ReceiptDsf | null>(null)
+  const [dsfHistory, setDsfHistory] = useState<DsfHistoryItem[]>([])
+  const [dsfHistoryLoading, setDsfHistoryLoading] = useState(false)
 
   /* camera / capture */
   const [isMobile, setIsMobile] = useState(false)
@@ -180,6 +188,13 @@ export default function ClientesPage() {
       const data: ClienteData = await res.json()
       setCliente(data)
       setMode('viewing')
+      setDsfHistory([])
+      setDsfHistoryLoading(true)
+      fetch(`/api/clients/${data.id}/dsfs`)
+        .then((r) => r.json())
+        .then((j) => setDsfHistory(j.dsfs ?? []))
+        .catch(() => {})
+        .finally(() => setDsfHistoryLoading(false))
     } catch {
       setMode('idle')
     }
@@ -349,7 +364,7 @@ export default function ClientesPage() {
   /* ── File select (desktop drag & drop / file input) ────────────────────────── */
 
   function handleFileSelect(file: File) {
-    if (!file.type.startsWith('image/')) return
+    if (!file.type.startsWith('image/') && file.type !== 'application/pdf') return
     const reader = new FileReader()
     reader.onload = (e) => {
       const result = e.target?.result as string
@@ -384,7 +399,7 @@ export default function ClientesPage() {
       const res = await fetch('/api/dsf/upload-signed', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dsfId: receiptDsf.id, imageBase64: capturedImage }),
+        body: JSON.stringify({ dsfId: receiptDsf.id, fileBase64: capturedImage }),
       })
       if (!res.ok) {
         const err = await res.json()
@@ -392,7 +407,7 @@ export default function ClientesPage() {
         setMode('dsf_scanning')
         return
       }
-      setMode('viewing')
+      setMode('dsf_concluida')
     } catch {
       setUploadError('Erro de conexão. Tente novamente.')
       setMode('dsf_scanning')
@@ -407,8 +422,8 @@ export default function ClientesPage() {
     <div className="p-4 sm:p-8 max-w-2xl mx-auto">
 
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-slate-900">Balcão de Atendimento</h1>
-        <p className="text-sm text-slate-500 mt-0.5">Busque o paciente pelo CPF para iniciar o atendimento</p>
+        <h1 className="text-xl font-bold text-slate-900">Emissão DSF</h1>
+        <p className="text-sm text-slate-500 mt-0.5">Busque o cliente pelo CPF para iniciar o atendimento</p>
       </div>
 
       {/* CPF search */}
@@ -662,6 +677,64 @@ export default function ClientesPage() {
               Atualizar Dados
             </button>
           </div>
+        </div>
+      )}
+
+      {/* ── DSF HISTORY (no viewing) ── */}
+      {mode === 'viewing' && cliente && (dsfHistoryLoading || dsfHistory.length > 0) && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
+            <p className="text-sm font-semibold text-slate-700">Histórico de DSFs</p>
+            {dsfHistoryLoading && <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />}
+            {!dsfHistoryLoading && <span className="text-xs text-slate-400">{dsfHistory.length} registro{dsfHistory.length !== 1 ? 's' : ''}</span>}
+          </div>
+
+          {dsfHistoryLoading ? (
+            <div className="px-5 py-6 text-center text-xs text-slate-400">Carregando...</div>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {dsfHistory.map((dsf) => (
+                <div key={dsf.id} className="px-5 py-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono text-xs font-semibold text-slate-700">{dsf.numeroDsf}</span>
+                        <span className={`inline-flex px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
+                          dsf.status === 'CONCLUIDA' ? 'bg-green-100 text-green-700'
+                          : dsf.status === 'CANCELADA' ? 'bg-red-100 text-red-700'
+                          : 'bg-amber-100 text-amber-700'
+                        }`}>
+                          {dsf.status === 'CONCLUIDA' ? 'Concluída' : dsf.status === 'CANCELADA' ? 'Cancelada' : 'Emitida'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 mt-0.5">{dsf.tipoServicoLabel}</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        {new Date(dsf.dataEmissao).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Sao_Paulo' })}
+                        {' · '}RT: {dsf.rtNome}{dsf.rtCrf ? ` (${dsf.rtCrf})` : ''}
+                      </p>
+                      {dsf.observacoes && (
+                        <p className="text-[11px] text-slate-400 mt-0.5 italic truncate max-w-xs">{dsf.observacoes}</p>
+                      )}
+                    </div>
+                    {dsf.driveFileId && (
+                      <a
+                        href={`https://drive.google.com/file/d/${dsf.driveFileId}/view`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-medium text-blue-700 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors"
+                      >
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                        PDF
+                      </a>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -1110,9 +1183,19 @@ export default function ClientesPage() {
           )}
 
           {capturedImage ? (
-            /* Preview da imagem selecionada/capturada */
+            /* Preview da imagem ou PDF selecionado */
             <div className="p-4 space-y-3">
-              <img src={capturedImage} alt="Cupom capturado" className="w-full rounded-xl object-contain max-h-[60vh]" />
+              {capturedImage.startsWith('data:application/pdf')
+                ? (
+                  <div className="flex flex-col items-center justify-center gap-3 py-10 bg-slate-800 rounded-xl">
+                    <svg className="w-14 h-14 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                    </svg>
+                    <p className="text-white text-sm font-medium">PDF pronto para envio</p>
+                  </div>
+                )
+                : <img src={capturedImage} alt="Cupom capturado" className="w-full rounded-xl object-contain max-h-[60vh]" />
+              }
               <div className="flex gap-3">
                 <button type="button" onClick={() => { setCapturedImage(null) }}
                   disabled={mode === 'dsf_uploading'}
@@ -1181,7 +1264,7 @@ export default function ClientesPage() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/*,application/pdf"
                 className="hidden"
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(f) }}
               />
@@ -1202,12 +1285,64 @@ export default function ClientesPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
                 </svg>
                 <div className="text-center">
-                  <p className="text-white font-semibold text-sm">Arraste a foto do cupom assinado aqui</p>
-                  <p className="text-slate-400 text-xs mt-1">ou clique para selecionar — JPG, PNG</p>
+                  <p className="text-white font-semibold text-sm">Arraste a foto ou PDF do cupom assinado aqui</p>
+                  <p className="text-slate-400 text-xs mt-1">ou clique para selecionar — JPG, PNG, PDF</p>
                 </div>
               </button>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── DSF CONCLUÍDA ── */}
+      {mode === 'dsf_concluida' && receiptDsf && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          {/* Cabeçalho verde */}
+          <div className="bg-emerald-600 px-6 py-8 flex flex-col items-center text-center">
+            <div className="w-14 h-14 bg-white/20 rounded-full flex items-center justify-center mb-3">
+              <svg className="w-8 h-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <p className="text-white font-bold text-lg leading-tight">DSF Concluída!</p>
+            <p className="text-emerald-100 text-sm mt-1">Documento arquivado com sucesso no Google Drive</p>
+            <p className="text-white font-mono font-semibold text-base mt-3 bg-white/10 px-4 py-1.5 rounded-full">
+              {receiptDsf.numeroDsf}
+            </p>
+          </div>
+
+          {/* Resumo */}
+          <div className="px-6 py-5 space-y-3">
+            <Row label="Paciente" value={receiptDsf.clienteNome} />
+            <Row label="CPF" value={fmtCpfDisplay(receiptDsf.clienteCpf)} />
+            <Row label="Serviço" value={receiptDsf.tipoServicoLabel} />
+            <Row label="Responsável Técnico" value={`${receiptDsf.rtNome}${receiptDsf.rtCrf ? ` — ${receiptDsf.rtCrf}` : ''}`} />
+            <Row label="Data" value={new Date(receiptDsf.dataEmissao).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })} />
+          </div>
+
+          {/* Ações */}
+          <div className="px-6 pb-6 flex flex-col sm:flex-row gap-3">
+            <button
+              type="button"
+              onClick={() => { setReceiptDsf(null); setCapturedImage(null); setMode('viewing') }}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-sm font-medium rounded-xl transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+              Ver Cadastro do Paciente
+            </button>
+            <button
+              type="button"
+              onClick={() => { setCliente(null); setReceiptDsf(null); setCapturedImage(null); setCpfInput(''); setMode('idle') }}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+              </svg>
+              Novo Atendimento
+            </button>
+          </div>
         </div>
       )}
     </div>
@@ -1215,6 +1350,15 @@ export default function ClientesPage() {
 }
 
 /* ─── Micro-components ───────────────────────────────────────────────────────── */
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-start justify-between gap-4 text-sm">
+      <span className="text-slate-500 flex-shrink-0">{label}</span>
+      <span className="text-slate-800 font-medium text-right">{value}</span>
+    </div>
+  )
+}
 
 function F({ label, children }: { label: string; children: React.ReactNode }) {
   return (
