@@ -434,7 +434,7 @@ export default function ClientesPage() {
               type="text" value={cpfInput}
               onChange={e => { setCpfInput(fmtCpf(e.target.value)); if (mode !== 'idle') setMode('idle') }}
               placeholder="000.000.000-00"
-              className="w-full pl-4 pr-9 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full pl-4 pr-9 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               maxLength={14} autoComplete="off"
             />
             {cpfInput && (

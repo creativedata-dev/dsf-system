@@ -31,7 +31,7 @@ export function CpfSearch() {
           value={cpf}
           onChange={(e) => setCpf(formatCPF(e.target.value))}
           placeholder="000.000.000-00"
-          className="w-full pl-4 pr-10 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-slate-400"
+          className="w-full pl-4 pr-10 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent placeholder:text-slate-400"
           maxLength={14}
           autoComplete="off"
         />
