@@ -45,6 +45,18 @@ export const authOptions: NextAuthOptions = {
         token.tenantId = (user as { tenantId: string }).tenantId
         token.permissions = (user as { permissions: Permission[] }).permissions
         token.crf = (user as { crf: string | null }).crf
+      } else if (token.id) {
+        // Re-fetch user data on every token refresh so edits reflect immediately
+        const dbUser = await prisma.user.findUnique({
+          where: { id: token.id as string },
+          select: { nome: true, email: true, permissions: true, crf: true, ativo: true },
+        })
+        if (dbUser && dbUser.ativo) {
+          token.name = dbUser.nome
+          token.email = dbUser.email
+          token.permissions = dbUser.permissions
+          token.crf = dbUser.crf
+        }
       }
       return token
     },
