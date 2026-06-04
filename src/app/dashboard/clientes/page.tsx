@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { TIPO_SERVICO_OPTIONS } from '@/lib/tipo-servico'
 
 /* ─── Types ──────────────────────────────────────────────────────────────────── */
 
@@ -44,6 +43,7 @@ interface ReceiptDsf {
   clienteTelefone: string
   tipoServico: string
   tipoServicoLabel: string
+  textoOrientacao: string | null
   observacoes: string | null
   insumos: { nomeProduto: string; lote: string; fabricante: string; validade: string }[]
 }
@@ -116,6 +116,16 @@ export default function ClientesPage() {
 
   const [dsfForm, setDsfForm] = useState<DsfForm>({ tipoServico: '', observacoes: '', insumos: [] })
   const [dsfError, setDsfError] = useState('')
+  const [procedimentoOptions, setProcedimentoOptions] = useState<{ value: string; label: string }[]>([])
+
+  /* ── Load active procedures for this tenant ─────────────────────────────────── */
+
+  useEffect(() => {
+    fetch('/api/procedimentos')
+      .then((r) => r.json())
+      .then((d) => { if (d.options) setProcedimentoOptions(d.options) })
+      .catch(() => {})
+  }, [])
 
   /* ── Detect mobile/touch device ─────────────────────────────────────────────── */
 
@@ -839,7 +849,7 @@ export default function ClientesPage() {
               <select value={dsfForm.tipoServico} onChange={e => setDsfForm(p => ({ ...p, tipoServico: e.target.value }))}
                 disabled={mode === 'submitting_dsf'} className={`${inp} appearance-none`}>
                 <option value="">Selecione o serviço prestado...</option>
-                {TIPO_SERVICO_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                {procedimentoOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
             </F>
             <F label="Evolução Farmacêutica e Conduta Proposta">
@@ -977,6 +987,9 @@ export default function ClientesPage() {
               <div className="mb-4">
                 <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Serviço Prestado</p>
                 <p className="font-semibold text-base">{receiptDsf.tipoServicoLabel}</p>
+                {receiptDsf.textoOrientacao && (
+                  <p className="whitespace-pre-wrap text-sm text-slate-600 mt-1 bg-slate-50 rounded p-2">{receiptDsf.textoOrientacao}</p>
+                )}
               </div>
 
               {receiptDsf.observacoes && (
@@ -1074,6 +1087,9 @@ export default function ClientesPage() {
 
               <p className="font-bold uppercase mb-1">Serviço Prestado</p>
               <p className="font-semibold">{receiptDsf.tipoServicoLabel}</p>
+              {receiptDsf.textoOrientacao && (
+                <p className="whitespace-pre-wrap text-slate-600 text-xs mt-1">{receiptDsf.textoOrientacao}</p>
+              )}
 
               {receiptDsf.insumos.length > 0 && (
                 <>

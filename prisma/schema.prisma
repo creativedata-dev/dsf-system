@@ -78,11 +78,12 @@ model Tenant {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  users           User[]
-  clientes        Cliente[]
-  dsfs            DSF[]
-  driveCredential DriveCredential?
-  auditLogs       AuditLog[]
+  users                User[]
+  clientes             Cliente[]
+  dsfs                 DSF[]
+  driveCredential      DriveCredential?
+  auditLogs            AuditLog[]
+  procedimentoConfigs  ProcedimentoConfig[]
 }
 
 model User {
@@ -200,5 +201,20 @@ model AuditLog {
   user   User?   @relation(fields: [userId], references: [id])
 
   @@index([tenantId, createdAt(sort: Desc)])  // painel de auditoria paginado
+  @@index([tenantId])
+}
+
+model ProcedimentoConfig {
+  id               String      @id @default(uuid())
+  tenantId         String
+  tipoServico      TipoServico
+  ativo            Boolean     @default(true)
+  textoOrientacao  String?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, tipoServico])
   @@index([tenantId])
 }

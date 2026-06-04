@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
 
   const tenantId = session.user.tenantId
 
-  const [cliente, tenant] = await Promise.all([
+  const [cliente, tenant, procedimentoConfig] = await Promise.all([
     prisma.cliente.findUnique({
       where: { id: clienteId },
       select: { id: true, tenantId: true, nome: true, cpf: true, dataNascimento: true, sexo: true, telefone: true, endereco: true },
@@ -52,6 +52,10 @@ export async function POST(request: NextRequest) {
     prisma.tenant.findUnique({
       where: { id: tenantId },
       select: { nomeFantasia: true, cnpj: true, telefone: true, logoUrl: true, tipoImpressao: true },
+    }),
+    prisma.procedimentoConfig.findUnique({
+      where: { tenantId_tipoServico: { tenantId, tipoServico: tipoServico as TipoServico } },
+      select: { textoOrientacao: true },
     }),
   ])
 
@@ -164,6 +168,7 @@ export async function POST(request: NextRequest) {
     clienteTelefone: cliente.telefone,
     tipoServico,
     tipoServicoLabel: TIPO_SERVICO_LABELS[tipoServico] ?? tipoServico,
+    textoOrientacao: procedimentoConfig?.textoOrientacao ?? null,
     observacoes: observacoes?.trim() || null,
     insumos: insumosCreated.map((i) => ({
       nomeProduto: i.nomeProduto,
