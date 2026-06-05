@@ -14,6 +14,9 @@ interface DashboardShellProps {
   tenantName: string
   tenantLogoUrl: string | null
   permissions: string[]
+  assinaturaStatus?: string | null
+  assinaturaExpiraEm?: string | null
+  trialExpiraEm?: string | null
 }
 
 export function DashboardShell({
@@ -24,6 +27,9 @@ export function DashboardShell({
   tenantName,
   tenantLogoUrl,
   permissions,
+  assinaturaStatus,
+  assinaturaExpiraEm,
+  trialExpiraEm,
 }: DashboardShellProps) {
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
@@ -146,6 +152,40 @@ export function DashboardShell({
           </>
         )}
       </nav>
+
+      {/* Badge de assinatura */}
+      {assinaturaStatus && assinaturaStatus !== 'ATIVA' && assinaturaStatus !== 'VITALICIO' && (
+        <div className={`mx-3 mb-2 px-3 py-2 rounded-lg text-xs ${
+          assinaturaStatus === 'TRIAL'
+            ? 'bg-amber-50 border border-amber-200 text-amber-800'
+            : 'bg-red-50 border border-red-200 text-red-800'
+        }`}>
+          {assinaturaStatus === 'TRIAL' && trialExpiraEm && (
+            <>
+              <p className="font-semibold">Período de teste</p>
+              <p>Expira em {new Date(trialExpiraEm).toLocaleDateString('pt-BR')}</p>
+            </>
+          )}
+          {assinaturaStatus === 'SUSPENSA' && (
+            <>
+              <p className="font-semibold">Assinatura suspensa</p>
+              <p>Regularize seu pagamento.</p>
+            </>
+          )}
+          {(assinaturaStatus === 'EXPIRADA' || assinaturaStatus === 'CANCELADA') && (
+            <>
+              <p className="font-semibold">Acesso encerrado</p>
+              <p>Entre em contato com o suporte.</p>
+            </>
+          )}
+          {assinaturaStatus === 'SEM_ASSINATURA' && (
+            <>
+              <p className="font-semibold">Sem assinatura</p>
+              <p>Entre em contato com o suporte.</p>
+            </>
+          )}
+        </div>
+      )}
 
       {/* User info + Logout */}
       <div className="px-4 py-3 border-t border-slate-100 flex-shrink-0 space-y-3">

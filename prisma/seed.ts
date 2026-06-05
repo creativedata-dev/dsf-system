@@ -2,7 +2,7 @@ import { config } from 'dotenv'
 import { resolve } from 'path'
 config({ path: resolve(process.cwd(), '.env'), override: true })
 
-import { PrismaClient, Permission } from '../src/generated/prisma/client'
+import { PrismaClient, Permission, TipoPlano, StatusAssinatura } from '../src/generated/prisma/client'
 import { PrismaNeon } from '@prisma/adapter-neon'
 import { neonConfig } from '@neondatabase/serverless'
 import ws from 'ws'
@@ -110,6 +110,67 @@ async function main() {
       permissions: julianaPerms,
     },
   })
+
+  // ─── Planos padrão ────────────────────────────────────────────────────────────
+
+  const planosData = [
+    {
+      nome: 'Trial',
+      descricao: '14 dias gratuitos para conhecer o FarmaSign.',
+      tipo: TipoPlano.TRIAL,
+      precoMensal: null, precoAnual: null,
+      limiteUsuarios: 2, limiteDsfsMes: 30, trialDias: 14,
+    },
+    {
+      nome: 'Mensal',
+      descricao: 'Acesso completo com cobrança mensal.',
+      tipo: TipoPlano.MENSAL,
+      precoMensal: 9900, precoAnual: null,
+      limiteUsuarios: null, limiteDsfsMes: null, trialDias: null,
+    },
+    {
+      nome: 'Anual',
+      descricao: 'Acesso completo com desconto no pagamento anual.',
+      tipo: TipoPlano.ANUAL,
+      precoMensal: null, precoAnual: 99000,
+      limiteUsuarios: null, limiteDsfsMes: null, trialDias: null,
+    },
+    {
+      nome: 'Vitalício',
+      descricao: 'Pagamento único, acesso para sempre.',
+      tipo: TipoPlano.VITALICIO,
+      precoMensal: null, precoAnual: null,
+      limiteUsuarios: null, limiteDsfsMes: null, trialDias: null,
+    },
+  ]
+
+  const planosMap: Record<string, string> = {}
+  for (const p of planosData) {
+    const existing = await prisma.plano.findFirst({ where: { tipo: p.tipo } })
+    if (existing) {
+      planosMap[p.tipo] = existing.id
+    } else {
+      const criado = await prisma.plano.create({ data: p })
+      planosMap[p.tipo] = criado.id
+    }
+  }
+
+  // ─── Assinatura trial para Drogaria Rio (se não existir) ──────────────────────
+
+  const assinaturaExistente = await prisma.assinatura.findUnique({ where: { tenantId: tenantDrogaria.id } })
+  if (!assinaturaExistente) {
+    const trialExpiraEm = new Date()
+    trialExpiraEm.setDate(trialExpiraEm.getDate() + 14)
+    await prisma.assinatura.create({
+      data: {
+        tenantId: tenantDrogaria.id,
+        planoId: planosMap[TipoPlano.TRIAL],
+        status: StatusAssinatura.TRIAL,
+        trialExpiraEm,
+        expiraEm: trialExpiraEm,
+      },
+    })
+  }
 
   await prisma.$disconnect()
 

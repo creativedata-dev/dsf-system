@@ -19,6 +19,49 @@ interface TenantItem {
   _count: { users: number; dsfs: number }
 }
 
+interface PlanoItem {
+  id: string
+  nome: string
+  tipo: string
+  precoMensal: number | null
+  precoAnual: number | null
+  limiteUsuarios: number | null
+  limiteDsfsMes: number | null
+  trialDias: number | null
+  ativo: boolean
+  createdAt: string
+}
+
+interface AssinaturaItem {
+  id: string
+  tenantId: string
+  planoId: string
+  plano: PlanoItem
+  status: string
+  inicioEm: string
+  expiraEm: string | null
+  trialExpiraEm: string | null
+  canceladaEm: string | null
+  motivoCancelamento: string | null
+  gateway: string | null
+  gatewayCustomerId: string | null
+  gatewaySubscriptionId: string | null
+  obs: string | null
+  createdAt: string
+  pagamentos: PagamentoItem[]
+}
+
+interface PagamentoItem {
+  id: string
+  valor: number
+  moeda: string
+  status: string
+  gateway: string
+  gatewayPaymentId: string | null
+  descricao: string | null
+  createdAt: string
+}
+
 interface UserItem {
   id: string
   tenantId: string
@@ -128,9 +171,9 @@ export function TenantsClient() {
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState('')
 
-  // Modal detalhe (tabs: dados | usuários)
+  // Modal detalhe (tabs: dados | usuários | assinatura)
   const [detailTenant, setDetailTenant] = useState<TenantItem | null>(null)
-  const [detailTab, setDetailTab] = useState<'dados' | 'usuarios'>('dados')
+  const [detailTab, setDetailTab] = useState<'dados' | 'usuarios' | 'assinatura'>('dados')
   const [editForm, setEditForm] = useState<TenantFormState>(BLANK_TENANT_FORM)
   const [saving, setSaving] = useState(false)
   const [editError, setEditError] = useState('')
@@ -138,6 +181,14 @@ export function TenantsClient() {
   // Usuários do tenant selecionado
   const [users, setUsers] = useState<UserItem[]>([])
   const [usersLoading, setUsersLoading] = useState(false)
+
+  // Assinatura do tenant selecionado
+  const [assinatura, setAssinatura] = useState<AssinaturaItem | null | undefined>(undefined) // undefined = não carregado
+  const [planos, setPlanos] = useState<PlanoItem[]>([])
+  const [assinaturaForm, setAssinaturaForm] = useState({ planoId: '', status: 'TRIAL', expiraEm: '', gateway: '', gatewayCustomerId: '', gatewaySubscriptionId: '', obs: '' })
+  const [assinaturaSaving, setAssinaturaSaving] = useState(false)
+  const [assinaturaError, setAssinaturaError] = useState('')
+  const [assinaturaSaved, setAssinaturaSaved] = useState(false)
 
   // Sub-modal usuário (criar/editar)
   const [userModal, setUserModal] = useState<{ mode: 'create' | 'edit'; user?: UserItem } | null>(null)
@@ -198,9 +249,55 @@ export function TenantsClient() {
     setUsers([])
   }
 
-  function switchTab(tab: 'dados' | 'usuarios') {
+  const fetchAssinatura = useCallback(async (tenantId: string) => {
+    setAssinatura(undefined)
+    setAssinaturaError('')
+    try {
+      const [resA, resP] = await Promise.all([
+        fetch(`/api/admin/assinaturas?tenantId=${tenantId}`),
+        fetch('/api/admin/planos'),
+      ])
+      if (resA.ok) {
+        const { assinatura: a } = await resA.json()
+        setAssinatura(a ?? null)
+        if (a) {
+          setAssinaturaForm({
+            planoId: a.planoId, status: a.status,
+            expiraEm: a.expiraEm ? a.expiraEm.slice(0, 10) : '',
+            gateway: a.gateway ?? '', gatewayCustomerId: a.gatewayCustomerId ?? '',
+            gatewaySubscriptionId: a.gatewaySubscriptionId ?? '', obs: a.obs ?? '',
+          })
+        } else {
+          setAssinaturaForm({ planoId: '', status: 'TRIAL', expiraEm: '', gateway: '', gatewayCustomerId: '', gatewaySubscriptionId: '', obs: '' })
+        }
+      }
+      if (resP.ok) setPlanos((await resP.json()).planos)
+    } catch { setAssinaturaError('Erro ao carregar assinatura') }
+  }, [])
+
+  async function submitAssinatura() {
+    if (!detailTenant || !assinaturaForm.planoId) { setAssinaturaError('Selecione um plano'); return }
+    setAssinaturaSaving(true); setAssinaturaError(''); setAssinaturaSaved(false)
+    try {
+      const method = assinatura ? 'PATCH' : 'POST'
+      const url = assinatura ? `/api/admin/assinaturas/${assinatura.id}` : '/api/admin/assinaturas'
+      const body = assinatura
+        ? { status: assinaturaForm.status, planoId: assinaturaForm.planoId, expiraEm: assinaturaForm.expiraEm || null, gateway: assinaturaForm.gateway || null, gatewayCustomerId: assinaturaForm.gatewayCustomerId || null, gatewaySubscriptionId: assinaturaForm.gatewaySubscriptionId || null, obs: assinaturaForm.obs || null }
+        : { tenantId: detailTenant.id, ...assinaturaForm, expiraEm: assinaturaForm.expiraEm || null, gateway: assinaturaForm.gateway || null, gatewayCustomerId: assinaturaForm.gatewayCustomerId || null, gatewaySubscriptionId: assinaturaForm.gatewaySubscriptionId || null, obs: assinaturaForm.obs || null }
+      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      const json = await res.json()
+      if (!res.ok) { setAssinaturaError(json.error ?? 'Erro ao salvar'); return }
+      setAssinatura(json.assinatura)
+      setAssinaturaSaved(true)
+      setTimeout(() => setAssinaturaSaved(false), 3000)
+    } catch { setAssinaturaError('Falha de conexão') }
+    finally { setAssinaturaSaving(false) }
+  }
+
+  function switchTab(tab: 'dados' | 'usuarios' | 'assinatura') {
     setDetailTab(tab)
     if (tab === 'usuarios' && detailTenant) fetchUsers(detailTenant.id)
+    if (tab === 'assinatura' && detailTenant) fetchAssinatura(detailTenant.id)
   }
 
   /* ── Salvar dados tenant ── */
@@ -457,10 +554,10 @@ export function TenantsClient() {
 
             {/* Tabs */}
             <div className="flex border-b border-slate-100 px-6 flex-shrink-0">
-              {(['dados', 'usuarios'] as const).map((tab) => (
+              {(['dados', 'usuarios', 'assinatura'] as const).map((tab) => (
                 <button key={tab} onClick={() => switchTab(tab)}
                   className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${detailTab === tab ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
-                  {tab === 'dados' ? 'Dados' : `Usuários (${detailTenant._count.users})`}
+                  {tab === 'dados' ? 'Dados' : tab === 'usuarios' ? `Usuários (${detailTenant._count.users})` : 'Assinatura'}
                 </button>
               ))}
             </div>
@@ -529,6 +626,115 @@ export function TenantsClient() {
                         </div>
                       ))}
                     </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── Tab Assinatura ── */}
+              {detailTab === 'assinatura' && (
+                <div className="p-6 space-y-6">
+                  {assinatura === undefined ? (
+                    <div className="flex justify-center py-8"><div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>
+                  ) : (
+                    <>
+                      {/* Formulário de assinatura */}
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700 mb-1">Plano</label>
+                          <select value={assinaturaForm.planoId} onChange={e => setAssinaturaForm(f => ({ ...f, planoId: e.target.value }))}
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="">Selecione um plano…</option>
+                            {planos.filter(p => p.ativo).map(p => (
+                              <option key={p.id} value={p.id}>
+                                {p.nome} — {p.tipo}
+                                {p.precoMensal ? ` · R$ ${(p.precoMensal / 100).toFixed(2)}/mês` : ''}
+                                {p.precoAnual ? ` · R$ ${(p.precoAnual / 100).toFixed(2)}/ano` : ''}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700 mb-1">Status</label>
+                          <select value={assinaturaForm.status} onChange={e => setAssinaturaForm(f => ({ ...f, status: e.target.value }))}
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            {['TRIAL','ATIVA','SUSPENSA','CANCELADA','EXPIRADA'].map(s => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700 mb-1">Expira em (deixe vazio = vitalício)</label>
+                          <input type="date" value={assinaturaForm.expiraEm} onChange={e => setAssinaturaForm(f => ({ ...f, expiraEm: e.target.value }))}
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                        </div>
+                        <div className="grid grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-slate-700 mb-1">Gateway</label>
+                            <select value={assinaturaForm.gateway} onChange={e => setAssinaturaForm(f => ({ ...f, gateway: e.target.value }))}
+                              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                              <option value="">Nenhum</option>
+                              <option value="stripe">Stripe</option>
+                              <option value="asaas">Asaas</option>
+                              <option value="mercadopago">Mercado Pago</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-700 mb-1">Customer ID</label>
+                            <input value={assinaturaForm.gatewayCustomerId} onChange={e => setAssinaturaForm(f => ({ ...f, gatewayCustomerId: e.target.value }))}
+                              placeholder="cus_…"
+                              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-700 mb-1">Subscription ID</label>
+                            <input value={assinaturaForm.gatewaySubscriptionId} onChange={e => setAssinaturaForm(f => ({ ...f, gatewaySubscriptionId: e.target.value }))}
+                              placeholder="sub_…"
+                              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-slate-700 mb-1">Observações internas</label>
+                          <textarea rows={2} value={assinaturaForm.obs} onChange={e => setAssinaturaForm(f => ({ ...f, obs: e.target.value }))}
+                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
+                        </div>
+                        {assinaturaError && <p className="text-xs text-red-600">{assinaturaError}</p>}
+                        {assinaturaSaved && <p className="text-xs text-green-600">Assinatura salva com sucesso.</p>}
+                        <button onClick={submitAssinatura} disabled={assinaturaSaving}
+                          className="w-full py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                          {assinaturaSaving ? 'Salvando…' : assinatura ? 'Salvar Alterações' : 'Criar Assinatura'}
+                        </button>
+                      </div>
+
+                      {/* Histórico de pagamentos */}
+                      {assinatura && assinatura.pagamentos.length > 0 && (
+                        <div>
+                          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Histórico de Pagamentos</p>
+                          <div className="space-y-2">
+                            {assinatura.pagamentos.map(p => (
+                              <div key={p.id} className="flex items-center justify-between text-xs bg-slate-50 rounded-lg px-3 py-2">
+                                <div>
+                                  <span className="font-medium text-slate-800">
+                                    {(p.valor / 100).toLocaleString('pt-BR', { style: 'currency', currency: p.moeda })}
+                                  </span>
+                                  <span className="text-slate-400 ml-2">{p.gateway}</span>
+                                  {p.descricao && <span className="text-slate-400 ml-2">· {p.descricao}</span>}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className={`px-1.5 py-0.5 rounded font-medium ${
+                                    p.status === 'APROVADO' ? 'bg-green-100 text-green-700' :
+                                    p.status === 'RECUSADO' ? 'bg-red-100 text-red-700' :
+                                    p.status === 'REEMBOLSADO' ? 'bg-amber-100 text-amber-700' :
+                                    'bg-slate-100 text-slate-600'
+                                  }`}>{p.status}</span>
+                                  <span className="text-slate-400">{new Date(p.createdAt).toLocaleDateString('pt-BR')}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {assinatura && assinatura.pagamentos.length === 0 && (
+                        <p className="text-xs text-slate-400 text-center py-4">Nenhum pagamento registrado.</p>
+                      )}
+                    </>
                   )}
                 </div>
               )}
