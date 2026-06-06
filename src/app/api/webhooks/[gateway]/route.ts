@@ -10,10 +10,16 @@ async function verifyStripe(request: NextRequest, rawBody: string): Promise<bool
     if (!sig) { console.warn('[webhook/stripe] stripe-signature header ausente'); return false }
 
     const { getStripe, getStripeWebhookSecret } = await import('@/lib/stripe')
-    const webhookSecret = await getStripeWebhookSecret()
     const stripe = await getStripe()
 
-    stripe.webhooks.constructEvent(rawBody, sig, webhookSecret, 600) // 10min tolerance
+    // Em modo teste: pula verificação de timestamp (eventos de replay têm timestamp antigo)
+    const config = await import('@/lib/prisma').then(m =>
+      m.prisma.gatewayConfig.findUnique({ where: { gateway: 'stripe' }, select: { modoTeste: true } })
+    )
+    const tolerance = config?.modoTeste ? 0 : 300 // 0 = sem limite de tempo
+
+    const webhookSecret = await getStripeWebhookSecret()
+    stripe.webhooks.constructEvent(rawBody, sig, webhookSecret, tolerance)
     return true
   } catch (e) {
     console.error('[webhook/stripe] verificacao falhou:', e instanceof Error ? e.message : e)
