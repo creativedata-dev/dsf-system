@@ -16,6 +16,7 @@ enum Permission {
   DSF_CANCELAR
   ANVISA_RELATORIOS
   DRIVE_CONFIGURAR
+  TEMPERATURA_GERENCIAR
   SUPER_ADMIN_GLOBAIS
 }
 
@@ -67,6 +68,10 @@ enum AuditAcao {
   PAGAMENTO_REGISTRADO
   PLANO_CRIADO
   PLANO_ATUALIZADO
+  AMBIENTE_CRIADO
+  AMBIENTE_ATUALIZADO
+  TEMPERATURA_REGISTRADA
+  CRON_ALERTAS_TEMPERATURA
 }
 
 enum TipoPlano {
@@ -115,6 +120,7 @@ model Tenant {
   auditLogs            AuditLog[]
   procedimentoConfigs  ProcedimentoConfig[]
   assinatura           Assinatura?
+  ambientes            Ambiente[]
 }
 
 model User {
@@ -324,4 +330,41 @@ model PagamentoLog {
 
   @@index([assinaturaId])
   @@index([tenantId, createdAt(sort: Desc)])
+}
+
+model Ambiente {
+  id         String   @id @default(uuid())
+  tenantId   String
+  nome       String
+  tipo       String   // "GELADEIRA" | "AMBIENTE" | "SALA_ESPECIAL"
+  tempMin    Float
+  tempMax    Float
+  umidadeMin Float?
+  umidadeMax Float?
+  ativo      Boolean  @default(true)
+  createdAt  DateTime @default(now())
+
+  registros RegistroTermoHigrometria[]
+  tenant    Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+}
+
+model RegistroTermoHigrometria {
+  id               String   @id @default(uuid())
+  ambienteId       String
+  tenantId         String
+  dataLeitura      DateTime @db.Date
+  periodo          String   // "MANHA" | "TARDE"
+  temperaturaGraus Float
+  umidadePercent   Float?
+  usuarioId        String
+  alertaDisparado  Boolean  @default(false)
+  observacao       String?
+  createdAt        DateTime @default(now())
+
+  ambiente Ambiente @relation(fields: [ambienteId], references: [id])
+
+  @@unique([ambienteId, dataLeitura, periodo])
+  @@index([tenantId, dataLeitura(sort: Desc)])
 }

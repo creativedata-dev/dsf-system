@@ -10,6 +10,10 @@
     {
       "path": "/api/cron/expirar-assinaturas",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/alertas-temperatura",
+      "schedule": "0 8 * * *"
     }
   ]
 }
