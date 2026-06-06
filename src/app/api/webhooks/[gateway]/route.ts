@@ -47,6 +47,7 @@ type NormalizedPayload = {
   novoStatusAssinatura: StatusAssinatura | null
   tenantId: string | null
   planoId: string | null
+  novaExpiraEm: Date | null
 }
 
 function normalizeStripe(body: Record<string, unknown>): NormalizedPayload | null {
@@ -54,7 +55,12 @@ function normalizeStripe(body: Record<string, unknown>): NormalizedPayload | nul
   const obj = (body.data as Record<string, unknown>)?.object as Record<string, unknown>
   if (!obj) return null
 
-  const meta = (obj.metadata ?? (obj.subscription_data as Record<string, unknown>)?.metadata ?? {}) as Record<string, string>
+  const meta = (
+    obj.metadata ??
+    (obj.subscription_details as Record<string, unknown>)?.metadata ??
+    (obj.subscription_data as Record<string, unknown>)?.metadata ??
+    {}
+  ) as Record<string, string>
 
   const statusPagMap: Record<string, StatusPagamento> = {
     'checkout.session.completed': StatusPagamento.APROVADO,
@@ -74,6 +80,16 @@ function normalizeStripe(body: Record<string, unknown>): NormalizedPayload | nul
     (obj.subscription as string) ??
     (obj.id as string && tipo === 'customer.subscription.deleted' ? obj.id as string : null)
 
+  // Extrair period_end da fatura (invoice.payment_succeeded)
+  let novaExpiraEm: Date | null = null
+  if (tipo === 'invoice.payment_succeeded') {
+    const lines = (obj.lines as Record<string, unknown>)?.data as Array<Record<string, unknown>> | undefined
+    const periodEnd = lines?.[0]?.period as Record<string, unknown>
+    if (typeof periodEnd?.end === 'number') {
+      novaExpiraEm = new Date(periodEnd.end * 1000)
+    }
+  }
+
   return {
     gatewaySubscriptionId: subscriptionId ?? null,
     gatewayCustomerId: (obj.customer as string) ?? null,
@@ -85,6 +101,7 @@ function normalizeStripe(body: Record<string, unknown>): NormalizedPayload | nul
     novoStatusAssinatura: statusAssMap[tipo] ?? null,
     tenantId: meta.tenantId ?? null,
     planoId: meta.planoId ?? null,
+    novaExpiraEm,
   }
 }
 
@@ -115,6 +132,7 @@ function normalizeAsaas(body: Record<string, unknown>): NormalizedPayload | null
     novoStatusAssinatura: statusAssMap[evento] ?? null,
     tenantId: null,
     planoId: null,
+    novaExpiraEm: null,
   }
 }
 
@@ -193,6 +211,13 @@ export async function POST(
     updateData.gatewayCustomerId = normalized.gatewayCustomerId
   }
   if (!assinatura.gateway) updateData.gateway = gateway
+
+  if (normalized.planoId && normalized.planoId !== assinatura.planoId) {
+    updateData.planoId = normalized.planoId
+  }
+  if (normalized.novaExpiraEm) {
+    updateData.expiraEm = normalized.novaExpiraEm
+  }
 
   if (normalized.novoStatusAssinatura && normalized.novoStatusAssinatura !== assinatura.status) {
     updateData.status = normalized.novoStatusAssinatura
