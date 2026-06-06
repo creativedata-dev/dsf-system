@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { AuditAcao, TipoImpressao } from '@/generated/prisma/client'
+import { AuditAcao, Permission, TipoImpressao } from '@/generated/prisma/client'
 
 export async function GET() {
   const session = await getServerSession(authOptions)
@@ -14,6 +14,10 @@ export async function GET() {
   }
 
   const tenants = await prisma.tenant.findMany({
+    where: {
+      // Exclui tenants internos (aqueles que têm usuário Super Admin)
+      NOT: { users: { some: { permissions: { has: Permission.SUPER_ADMIN_GLOBAIS } } } },
+    },
     select: {
       id: true,
       nomeFantasia: true,

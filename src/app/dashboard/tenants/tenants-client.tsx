@@ -257,6 +257,9 @@ export function TenantsClient() {
         fetch(`/api/admin/assinaturas?tenantId=${tenantId}`),
         fetch('/api/admin/planos'),
       ])
+      const planosData: PlanoItem[] = resP.ok ? (await resP.json()).planos : []
+      setPlanos(planosData)
+
       if (resA.ok) {
         const { assinatura: a } = await resA.json()
         setAssinatura(a ?? null)
@@ -268,10 +271,11 @@ export function TenantsClient() {
             gatewaySubscriptionId: a.gatewaySubscriptionId ?? '', obs: a.obs ?? '',
           })
         } else {
-          setAssinaturaForm({ planoId: '', status: 'TRIAL', expiraEm: '', gateway: '', gatewayCustomerId: '', gatewaySubscriptionId: '', obs: '' })
+          // Sem assinatura: pré-seleciona o primeiro plano ativo
+          const primeiro = planosData.find(p => p.ativo)
+          setAssinaturaForm({ planoId: primeiro?.id ?? '', status: 'ATIVA', expiraEm: '', gateway: '', gatewayCustomerId: '', gatewaySubscriptionId: '', obs: '' })
         }
       }
-      if (resP.ok) setPlanos((await resP.json()).planos)
     } catch { setAssinaturaError('Erro ao carregar assinatura') }
   }, [])
 
