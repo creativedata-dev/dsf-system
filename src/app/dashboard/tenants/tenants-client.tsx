@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { MODULOS_DISPONIVEIS } from '@/lib/modulos'
 
 /* ─── CheckoutButton ─────────────────────────────────────────────────────────── */
 
@@ -59,6 +60,7 @@ interface TenantItem {
   tipoImpressao: 'BOBINA_80MM' | 'FOLHA_A4'
   logoUrl: string | null
   ativo: boolean
+  modulosHabilitados: string[]
   createdAt: string
   _count: { users: number; dsfs: number }
   assinatura: {
@@ -220,9 +222,13 @@ export function TenantsClient() {
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState('')
 
-  // Modal detalhe (tabs: dados | usuários | assinatura)
+  // Modal detalhe (tabs: dados | usuários | assinatura | modulos)
   const [detailTenant, setDetailTenant] = useState<TenantItem | null>(null)
-  const [detailTab, setDetailTab] = useState<'dados' | 'usuarios' | 'assinatura'>('dados')
+  const [detailTab, setDetailTab] = useState<'dados' | 'usuarios' | 'assinatura' | 'modulos'>('dados')
+  const [modulosSelecionados, setModulosSelecionados] = useState<string[]>([])
+  const [modulosLegado, setModulosLegado] = useState(false)
+  const [modulosSaving, setModulosSaving] = useState(false)
+  const [modulosError, setModulosError] = useState('')
   const [editForm, setEditForm] = useState<TenantFormState>(BLANK_TENANT_FORM)
   const [saving, setSaving] = useState(false)
   const [editError, setEditError] = useState('')
@@ -291,6 +297,9 @@ export function TenantsClient() {
   function openDetail(t: TenantItem) {
     setDetailTenant(t)
     setDetailTab('dados')
+    setModulosSelecionados(t.modulosHabilitados)
+    setModulosLegado(t.modulosHabilitados.length === 0)
+    setModulosError('')
     setEditForm({ nomeFantasia: t.nomeFantasia, razaoSocial: t.razaoSocial, cnpj: fmtCnpjDisplay(t.cnpj),
       endereco: t.endereco, telefone: t.telefone, alvaraSanitario: t.alvaraSanitario,
       tipoImpressao: t.tipoImpressao, logoUrl: t.logoUrl })
@@ -349,10 +358,42 @@ export function TenantsClient() {
     finally { setAssinaturaSaving(false) }
   }
 
-  function switchTab(tab: 'dados' | 'usuarios' | 'assinatura') {
+  function switchTab(tab: 'dados' | 'usuarios' | 'assinatura' | 'modulos') {
     setDetailTab(tab)
     if (tab === 'usuarios' && detailTenant) fetchUsers(detailTenant.id)
     if (tab === 'assinatura' && detailTenant) fetchAssinatura(detailTenant.id)
+  }
+
+  function toggleModulo(slug: string) {
+    setModulosSelecionados(prev =>
+      prev.includes(slug) ? prev.filter(s => s !== slug) : [...prev, slug]
+    )
+  }
+
+  async function salvarModulos() {
+    if (!detailTenant) return
+    setModulosError('')
+    setModulosSaving(true)
+    try {
+      const res = await fetch(`/api/admin/tenants/${detailTenant.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ modulosHabilitados: modulosSelecionados }),
+      })
+      if (!res.ok) {
+        const e = await res.json()
+        setModulosError(e.error ?? 'Erro ao salvar')
+        return
+      }
+      const { tenant } = await res.json()
+      setDetailTenant(prev => prev ? { ...prev, modulosHabilitados: tenant.modulosHabilitados } : prev)
+      setModulosLegado(tenant.modulosHabilitados.length === 0)
+      setTenants(prev => prev.map(t => t.id === detailTenant.id ? { ...t, modulosHabilitados: tenant.modulosHabilitados } : t))
+    } catch {
+      setModulosError('Erro de conexão')
+    } finally {
+      setModulosSaving(false)
+    }
   }
 
   /* ── Salvar dados tenant ── */
@@ -634,11 +675,11 @@ export function TenantsClient() {
             </div>
 
             {/* Tabs */}
-            <div className="flex border-b border-slate-100 px-6 flex-shrink-0">
-              {(['dados', 'usuarios', 'assinatura'] as const).map((tab) => (
+            <div className="flex border-b border-slate-100 px-6 flex-shrink-0 overflow-x-auto">
+              {(['dados', 'usuarios', 'assinatura', 'modulos'] as const).map((tab) => (
                 <button key={tab} onClick={() => switchTab(tab)}
-                  className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors ${detailTab === tab ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
-                  {tab === 'dados' ? 'Dados' : tab === 'usuarios' ? `Usuários (${detailTenant._count.users})` : 'Assinatura'}
+                  className={`px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${detailTab === tab ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
+                  {tab === 'dados' ? 'Dados' : tab === 'usuarios' ? `Usuários (${detailTenant._count.users})` : tab === 'assinatura' ? 'Assinatura' : 'Módulos'}
                 </button>
               ))}
             </div>
@@ -821,6 +862,71 @@ export function TenantsClient() {
                       {assinatura && assinatura.pagamentos.length === 0 && (
                         <p className="text-xs text-slate-400 text-center py-4">Nenhum pagamento registrado.</p>
                       )}
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* ── Tab Módulos ── */}
+              {detailTab === 'modulos' && (
+                <div className="p-6 space-y-5">
+                  {modulosLegado && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                      <p className="text-sm font-medium text-amber-800 mb-1">Estado legado — todos os módulos liberados</p>
+                      <p className="text-xs text-amber-700 mb-3">Este tenant nunca teve módulos configurados. Ao salvar, apenas os módulos marcados ficarão ativos.</p>
+                      <button
+                        onClick={() => { setModulosLegado(false); setModulosSelecionados(MODULOS_DISPONIVEIS.map(m => m.slug)) }}
+                        className="text-xs text-amber-800 font-medium underline"
+                      >
+                        Definir módulos explicitamente →
+                      </button>
+                    </div>
+                  )}
+
+                  {!modulosLegado && (
+                    <>
+                      <div className="grid grid-cols-1 gap-3">
+                        {MODULOS_DISPONIVEIS.map(m => {
+                          const ativo = modulosSelecionados.includes(m.slug)
+                          return (
+                            <button
+                              key={m.slug}
+                              onClick={() => toggleModulo(m.slug)}
+                              className={`w-full text-left flex items-start gap-3 p-4 rounded-xl border transition ${ativo ? 'border-blue-300 bg-blue-50' : 'border-slate-200 bg-white hover:border-slate-300'}`}
+                            >
+                              <span className="text-xl shrink-0 mt-0.5">{m.icone}</span>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between gap-2">
+                                  <p className={`text-sm font-medium ${ativo ? 'text-blue-800' : 'text-slate-700'}`}>{m.label}</p>
+                                  <span className={`shrink-0 w-4 h-4 rounded-full border-2 flex items-center justify-center transition ${ativo ? 'bg-blue-600 border-blue-600' : 'border-slate-300'}`}>
+                                    {ativo && <span className="text-white text-[10px] font-bold leading-none">✓</span>}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-slate-500 mt-0.5">{m.descricao}</p>
+                              </div>
+                            </button>
+                          )
+                        })}
+                      </div>
+
+                      {modulosError && <p className="text-sm text-red-600">{modulosError}</p>}
+
+                      <div className="flex gap-3 pt-2">
+                        <button
+                          onClick={() => { setModulosSelecionados([]); setModulosLegado(true) }}
+                          disabled={modulosSaving}
+                          className="flex-1 py-2.5 border border-slate-200 rounded-xl text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition"
+                        >
+                          Reverter para legado
+                        </button>
+                        <button
+                          onClick={salvarModulos}
+                          disabled={modulosSaving}
+                          className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium rounded-xl text-sm transition"
+                        >
+                          {modulosSaving ? 'Salvando...' : 'Salvar módulos'}
+                        </button>
+                      </div>
                     </>
                   )}
                 </div>

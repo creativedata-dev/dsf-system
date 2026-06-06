@@ -29,6 +29,7 @@ export async function GET() {
       tipoImpressao: true,
       logoUrl: true,
       ativo: true,
+      modulosHabilitados: true,
       createdAt: true,
       _count: { select: { users: true, dsfs: true } },
       assinatura: {

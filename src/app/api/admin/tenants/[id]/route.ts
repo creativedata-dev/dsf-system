@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { AuditAcao, TipoImpressao } from '@/generated/prisma/client'
+import { MODULOS_SLUGS } from '@/lib/modulos'
 
 export async function PATCH(
   request: NextRequest,
@@ -28,6 +29,7 @@ export async function PATCH(
     tipoImpressao?: string
     logoUrl?: string | null
     ativo?: boolean
+    modulosHabilitados?: string[]
   }
   try {
     body = await request.json()
@@ -58,6 +60,13 @@ export async function PATCH(
   }
   if (body.logoUrl !== undefined) data.logoUrl = body.logoUrl ?? null
   if (body.ativo !== undefined) data.ativo = body.ativo
+  if (body.modulosHabilitados !== undefined) {
+    const invalidos = body.modulosHabilitados.filter(s => !MODULOS_SLUGS.includes(s))
+    if (invalidos.length > 0) {
+      return Response.json({ error: `Módulos inválidos: ${invalidos.join(', ')}` }, { status: 400 })
+    }
+    data.modulosHabilitados = body.modulosHabilitados
+  }
 
   const tenant = await prisma.tenant.update({
     where: { id },
@@ -73,6 +82,7 @@ export async function PATCH(
       tipoImpressao: true,
       logoUrl: true,
       ativo: true,
+      modulosHabilitados: true,
       createdAt: true,
     },
   })

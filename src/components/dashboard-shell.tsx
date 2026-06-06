@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { NavLink } from '@/components/nav-link'
 import { LogoutButton } from '@/components/logout-button'
+import { hasModulo } from '@/lib/modulos'
 
 interface DashboardShellProps {
   children: React.ReactNode
@@ -14,6 +15,7 @@ interface DashboardShellProps {
   tenantName: string
   tenantLogoUrl: string | null
   permissions: string[]
+  modulosHabilitados?: string[]
   assinaturaStatus?: string | null
   assinaturaExpiraEm?: string | null
   trialExpiraEm?: string | null
@@ -27,6 +29,7 @@ export function DashboardShell({
   tenantName,
   tenantLogoUrl,
   permissions,
+  modulosHabilitados = [],
   assinaturaStatus,
   assinaturaExpiraEm,
   trialExpiraEm,
@@ -78,7 +81,7 @@ export function DashboardShell({
             } />
           )}
 
-          {permissions.includes('CLIENTE_BUSCAR') && (
+          {permissions.includes('CLIENTE_BUSCAR') && hasModulo(modulosHabilitados, 'DSF') && (
             <NavLink href="/dashboard/clientes" label="Emissão DSF" icon={
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -105,11 +108,13 @@ export function DashboardShell({
             } />
           )}
 
-          <NavLink href="/dashboard/temperatura" label="Temperatura" icon={
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
-            </svg>
-          } />
+          {hasModulo(modulosHabilitados, 'TEMPERATURA') && (
+            <NavLink href="/dashboard/temperatura" label="Temperatura" icon={
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12-3c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3" />
+              </svg>
+            } />
+          )}
         </div>
 
         {/* ── Configuração ── */}

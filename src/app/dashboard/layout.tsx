@@ -14,7 +14,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const [tenant, assinatura] = await Promise.all([
     prisma.tenant.findUnique({
       where: { id: session.user.tenantId },
-      select: { nomeFantasia: true, logoUrl: true },
+      select: { nomeFantasia: true, logoUrl: true, modulosHabilitados: true },
     }),
     isSuperAdmin
       ? null
@@ -37,6 +37,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       tenantName={tenant?.nomeFantasia ?? '—'}
       tenantLogoUrl={tenant?.logoUrl ?? null}
       permissions={session.user.permissions}
+      modulosHabilitados={tenant?.modulosHabilitados ?? []}
       assinaturaStatus={assinatura?.status ?? null}
       assinaturaExpiraEm={assinatura?.expiraEm?.toISOString() ?? null}
       trialExpiraEm={assinatura?.trialExpiraEm?.toISOString() ?? null}

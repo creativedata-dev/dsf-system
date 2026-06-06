@@ -109,9 +109,10 @@ model Tenant {
   alvaraSanitario String
   logoUrl         String?
   tipoImpressao   TipoImpressao @default(BOBINA_80MM)
-  ativo           Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  ativo              Boolean  @default(true)
+  modulosHabilitados String[] @default([])
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   users                User[]
   clientes             Cliente[]
