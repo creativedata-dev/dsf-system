@@ -367,6 +367,10 @@ model Equipamento {
   status                String   @default("ATIVO") // "ATIVO" | "VENCENDO" | "VENCIDO" | "MANUTENCAO"
   laudoDriveFileId      String?
   laudoUrl              String?
+  numeroCertificado     String?
+  laboratorio           String?
+  fotoFileId            String?
+  fotoUrl               String?
   obs                   String?
   ativo                 Boolean  @default(true)
   createdAt             DateTime @default(now())

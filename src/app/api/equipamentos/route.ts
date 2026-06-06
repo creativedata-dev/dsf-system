@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json()
-  const { nome, marcaModelo, numeroSerie, dataUltimaCalibracao, dataProximaCalibracao, obs } = body
+  const { nome, marcaModelo, numeroSerie, dataUltimaCalibracao, dataProximaCalibracao, obs, numeroCertificado, laboratorio } = body
 
   if (!nome || !marcaModelo || !dataUltimaCalibracao || !dataProximaCalibracao) {
     return Response.json({ error: 'Campos obrigatórios ausentes' }, { status: 400 })
@@ -47,6 +47,8 @@ export async function POST(request: NextRequest) {
       dataUltimaCalibracao: ultima,
       dataProximaCalibracao: proxima,
       obs: obs || null,
+      numeroCertificado: numeroCertificado || null,
+      laboratorio: laboratorio || null,
       status,
     },
   })

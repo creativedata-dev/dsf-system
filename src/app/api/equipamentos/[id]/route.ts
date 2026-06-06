@@ -17,7 +17,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
   if (!equipamento) return Response.json({ error: 'Não encontrado' }, { status: 404 })
 
   const body = await request.json()
-  const { nome, marcaModelo, numeroSerie, dataUltimaCalibracao, dataProximaCalibracao, obs, status, ativo } = body
+  const { nome, marcaModelo, numeroSerie, dataUltimaCalibracao, dataProximaCalibracao, obs, status, ativo, numeroCertificado, laboratorio } = body
 
   const proxima = dataProximaCalibracao ? new Date(dataProximaCalibracao) : equipamento.dataProximaCalibracao
   const hoje = new Date()
@@ -40,6 +40,8 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       ...(dataUltimaCalibracao && { dataUltimaCalibracao: new Date(dataUltimaCalibracao) }),
       ...(dataProximaCalibracao && { dataProximaCalibracao: proxima }),
       ...(obs !== undefined && { obs: obs || null }),
+      ...(numeroCertificado !== undefined && { numeroCertificado: numeroCertificado || null }),
+      ...(laboratorio !== undefined && { laboratorio: laboratorio || null }),
       ...(ativo !== undefined && { ativo }),
       status: novoStatus,
     },
