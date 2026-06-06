@@ -6,22 +6,19 @@ import { AuditAcao, StatusAssinatura, StatusPagamento } from '@/generated/prisma
 
 async function verifyStripe(request: NextRequest, rawBody: string): Promise<boolean> {
   try {
-    const { getStripeWebhookSecret } = await import('@/lib/stripe')
-    const Stripe = (await import('stripe')).default
-    const secret = await getStripeWebhookSecret()
     const sig = request.headers.get('stripe-signature')
-    if (!sig) return false
-    // Instância temporária só para verificar assinatura (chave irrelevante aqui)
-    const stripe = new Stripe(process.env.STRIPE_TEMP_KEY ?? 'sk_test_placeholder', { apiVersion: '2026-05-27.dahlia' })
-    // Usa a chave real do banco para verificar
-    const config = await prisma.gatewayConfig.findUnique({ where: { gateway: 'stripe' }, select: { secretKeyEncrypted: true } })
-    const { decrypt } = await import('@/lib/crypto')
-    const secretKey = config?.secretKeyEncrypted ? decrypt(config.secretKeyEncrypted) : null
-    if (!secretKey) return false
-    const stripeReal = new Stripe(secretKey, { apiVersion: '2026-05-27.dahlia' })
-    stripeReal.webhooks.constructEvent(rawBody, sig, secret)
+    if (!sig) { console.warn('[webhook/stripe] stripe-signature header ausente'); return false }
+
+    const { getStripe, getStripeWebhookSecret } = await import('@/lib/stripe')
+    const webhookSecret = await getStripeWebhookSecret()
+    const stripe = await getStripe()
+
+    stripe.webhooks.constructEvent(rawBody, sig, webhookSecret)
     return true
-  } catch { return false }
+  } catch (e) {
+    console.error('[webhook/stripe] verificacao falhou:', e instanceof Error ? e.message : e)
+    return false
+  }
 }
 
 async function verifyAsaas(request: NextRequest): Promise<boolean> {
