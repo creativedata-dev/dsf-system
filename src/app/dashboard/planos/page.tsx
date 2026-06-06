@@ -278,57 +278,53 @@ export default function PlanosPage() {
           <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="bg-white rounded-2xl border border-slate-200 overflow-x-auto">
+          <table className="w-full text-sm min-w-[700px]">
             <thead>
               <tr className="border-b border-slate-100">
-                <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Plano</th>
-                <th className="px-5 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Tipo</th>
-                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Preço mensal</th>
-                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Preço anual</th>
-                <th className="px-5 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Usuários</th>
-                <th className="px-5 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">DSFs/mês</th>
-                <th className="px-5 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Assinaturas</th>
-                <th className="px-5 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
-                <th className="px-5 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Ações</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Plano</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Tipo</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Mensal</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Anual</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Users</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">DSFs</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Assin.</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {planos.map((p) => (
                 <tr key={p.id} className={`hover:bg-slate-50 transition-colors ${!p.ativo ? 'opacity-50' : ''}`}>
-                  <td className="px-5 py-4">
+                  <td className="px-4 py-3">
                     <p className="font-semibold text-slate-900">{p.nome}</p>
-                    {p.descricao && <p className="text-xs text-slate-400 mt-0.5 max-w-xs truncate">{p.descricao}</p>}
+                    {p.descricao && <p className="text-xs text-slate-400 mt-0.5 max-w-[200px] truncate">{p.descricao}</p>}
                     {p.tipo === 'TRIAL' && p.trialDias && (
                       <p className="text-xs text-amber-600 mt-0.5">{p.trialDias} dias</p>
                     )}
-                    <p className="text-[10px] text-slate-300 mt-1">{new Date(p.createdAt).toLocaleDateString('pt-BR')}</p>
+                    <p className="text-[10px] text-slate-300 mt-0.5">{new Date(p.createdAt).toLocaleDateString('pt-BR')}</p>
                   </td>
-                  <td className="px-5 py-4">
+                  <td className="px-4 py-3">
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${TIPO_COLOR[p.tipo]}`}>
                       {TIPO_LABEL[p.tipo]}
                     </span>
                   </td>
-                  <td className="px-5 py-4 text-right text-slate-700 tabular-nums">{fmtBRL(p.precoMensal)}</td>
-                  <td className="px-5 py-4 text-right text-slate-700 tabular-nums">{fmtBRL(p.precoAnual)}</td>
-                  <td className="px-5 py-4 text-center text-slate-600">{p.limiteUsuarios ?? '∞'}</td>
-                  <td className="px-5 py-4 text-center text-slate-600">{p.limiteDsfsMes ?? '∞'}</td>
-                  <td className="px-5 py-4 text-center">
-                    <span className="font-semibold text-slate-800">{p._count.assinaturas}</span>
-                  </td>
-                  <td className="px-5 py-4 text-center">
+                  <td className="px-4 py-3 text-right text-slate-700 tabular-nums text-sm">{fmtBRL(p.precoMensal)}</td>
+                  <td className="px-4 py-3 text-right text-slate-700 tabular-nums text-sm">{fmtBRL(p.precoAnual)}</td>
+                  <td className="px-4 py-3 text-center text-slate-600 text-sm">{p.limiteUsuarios ?? '∞'}</td>
+                  <td className="px-4 py-3 text-center text-slate-600 text-sm">{p.limiteDsfsMes ?? '∞'}</td>
+                  <td className="px-4 py-3 text-center">
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${p.ativo ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
-                      {p.ativo ? 'Ativo' : 'Inativo'}
+                      {p._count.assinaturas} · {p.ativo ? 'Ativo' : 'Inativo'}
                     </span>
                   </td>
-                  <td className="px-5 py-4 text-right">
-                    <div className="flex items-center justify-end gap-2">
+                  <td className="px-4 py-3 text-right">
+                    <div className="flex items-center justify-end gap-1.5">
                       <button onClick={() => openEdit(p)}
-                        className="px-3 py-1.5 text-xs font-medium text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-50">
+                        className="px-2.5 py-1.5 text-xs font-medium text-slate-700 border border-slate-200 rounded-lg hover:bg-slate-50">
                         Editar
                       </button>
                       <button onClick={() => toggleAtivo(p)}
-                        className={`px-3 py-1.5 text-xs font-medium rounded-lg ${p.ativo ? 'text-red-700 bg-red-50 hover:bg-red-100' : 'text-green-700 bg-green-50 hover:bg-green-100'}`}>
+                        className={`px-2.5 py-1.5 text-xs font-medium rounded-lg ${p.ativo ? 'text-red-700 bg-red-50 hover:bg-red-100' : 'text-green-700 bg-green-50 hover:bg-green-100'}`}>
                         {p.ativo ? 'Desativar' : 'Ativar'}
                       </button>
                     </div>
@@ -337,7 +333,7 @@ export default function PlanosPage() {
               ))}
               {planos.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-5 py-12 text-center text-sm text-slate-400">
+                  <td colSpan={8} className="px-5 py-12 text-center text-sm text-slate-400">
                     Nenhum plano cadastrado.
                   </td>
                 </tr>
