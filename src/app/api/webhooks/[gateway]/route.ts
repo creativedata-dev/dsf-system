@@ -2,38 +2,48 @@ import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { AuditAcao, StatusAssinatura, StatusPagamento } from '@/generated/prisma/client'
 
-// ─── Utilitários de verificação de assinatura por gateway ────────────────────
-// Adicione a lógica de verificação HMAC/assinatura específica de cada gateway aqui.
+// ─── Verificação de autenticidade por gateway ─────────────────────────────────
 
 async function verifyStripe(request: NextRequest, rawBody: string): Promise<boolean> {
-  const secret = process.env.STRIPE_WEBHOOK_SECRET
-  if (!secret) return false
-  // TODO: usar stripe.webhooks.constructEvent(rawBody, sig, secret)
-  const sig = request.headers.get('stripe-signature')
-  return !!sig // placeholder — implementar verificação real
+  try {
+    const { getStripeWebhookSecret } = await import('@/lib/stripe')
+    const Stripe = (await import('stripe')).default
+    const secret = await getStripeWebhookSecret()
+    const sig = request.headers.get('stripe-signature')
+    if (!sig) return false
+    // Instância temporária só para verificar assinatura (chave irrelevante aqui)
+    const stripe = new Stripe(process.env.STRIPE_TEMP_KEY ?? 'sk_test_placeholder', { apiVersion: '2026-05-27.dahlia' })
+    // Usa a chave real do banco para verificar
+    const config = await prisma.gatewayConfig.findUnique({ where: { gateway: 'stripe' }, select: { secretKeyEncrypted: true } })
+    const { decrypt } = await import('@/lib/crypto')
+    const secretKey = config?.secretKeyEncrypted ? decrypt(config.secretKeyEncrypted) : null
+    if (!secretKey) return false
+    const stripeReal = new Stripe(secretKey, { apiVersion: '2026-05-27.dahlia' })
+    stripeReal.webhooks.constructEvent(rawBody, sig, secret)
+    return true
+  } catch { return false }
 }
 
 async function verifyAsaas(request: NextRequest): Promise<boolean> {
-  const token = request.headers.get('asaas-access-token')
-  return token === process.env.ASAAS_WEBHOOK_TOKEN
+  const config = await prisma.gatewayConfig.findUnique({ where: { gateway: 'asaas' }, select: { webhookSecretEncrypted: true } })
+  if (!config?.webhookSecretEncrypted) return false
+  const { decrypt } = await import('@/lib/crypto')
+  const token = decrypt(config.webhookSecretEncrypted)
+  return request.headers.get('asaas-access-token') === token
 }
 
-async function verifyMercadoPago(request: NextRequest): Promise<boolean> {
-  // MercadoPago usa x-signature header
-  const sig = request.headers.get('x-signature')
-  return !!sig // placeholder — implementar verificação real
-}
-
-// ─── Normalização de payload por gateway ─────────────────────────────────────
-// Retorna { gatewaySubscriptionId, gatewayPaymentId, valor, status, evento }
+// ─── Normalização de payload ──────────────────────────────────────────────────
 
 type NormalizedPayload = {
   gatewaySubscriptionId: string | null
+  gatewayCustomerId: string | null
   gatewayPaymentId: string | null
-  valor: number           // em centavos
+  valor: number
   status: StatusPagamento
   evento: string
   novoStatusAssinatura: StatusAssinatura | null
+  tenantId: string | null
+  planoId: string | null
 }
 
 function normalizeStripe(body: Record<string, unknown>): NormalizedPayload | null {
@@ -41,26 +51,37 @@ function normalizeStripe(body: Record<string, unknown>): NormalizedPayload | nul
   const obj = (body.data as Record<string, unknown>)?.object as Record<string, unknown>
   if (!obj) return null
 
-  const statusMap: Record<string, StatusPagamento> = {
-    succeeded: StatusPagamento.APROVADO,
-    payment_failed: StatusPagamento.RECUSADO,
-    refunded: StatusPagamento.REEMBOLSADO,
+  const meta = (obj.metadata ?? (obj.subscription_data as Record<string, unknown>)?.metadata ?? {}) as Record<string, string>
+
+  const statusPagMap: Record<string, StatusPagamento> = {
+    'checkout.session.completed': StatusPagamento.APROVADO,
+    'invoice.payment_succeeded': StatusPagamento.APROVADO,
+    'invoice.payment_failed': StatusPagamento.RECUSADO,
+    'charge.refunded': StatusPagamento.REEMBOLSADO,
   }
 
-  const assinaturaMap: Record<string, StatusAssinatura> = {
-    'customer.subscription.created': StatusAssinatura.ATIVA,
-    'customer.subscription.updated': StatusAssinatura.ATIVA,
-    'customer.subscription.deleted': StatusAssinatura.CANCELADA,
+  const statusAssMap: Record<string, StatusAssinatura> = {
+    'checkout.session.completed': StatusAssinatura.ATIVA,
+    'invoice.payment_succeeded': StatusAssinatura.ATIVA,
     'invoice.payment_failed': StatusAssinatura.SUSPENSA,
+    'customer.subscription.deleted': StatusAssinatura.CANCELADA,
   }
+
+  const subscriptionId =
+    (obj.subscription as string) ??
+    (obj.id as string && tipo === 'customer.subscription.deleted' ? obj.id as string : null)
 
   return {
-    gatewaySubscriptionId: (obj.subscription as string) ?? (obj.id as string) ?? null,
-    gatewayPaymentId: (obj.id as string) ?? null,
-    valor: typeof obj.amount === 'number' ? obj.amount : typeof obj.amount_paid === 'number' ? obj.amount_paid as number : 0,
-    status: statusMap[tipo] ?? StatusPagamento.PENDENTE,
+    gatewaySubscriptionId: subscriptionId ?? null,
+    gatewayCustomerId: (obj.customer as string) ?? null,
+    gatewayPaymentId: (obj.payment_intent as string) ?? (obj.id as string) ?? null,
+    valor: typeof obj.amount_total === 'number' ? obj.amount_total :
+           typeof obj.amount_paid === 'number' ? obj.amount_paid as number : 0,
+    status: statusPagMap[tipo] ?? StatusPagamento.PENDENTE,
     evento: tipo,
-    novoStatusAssinatura: assinaturaMap[tipo] ?? null,
+    novoStatusAssinatura: statusAssMap[tipo] ?? null,
+    tenantId: meta.tenantId ?? null,
+    planoId: meta.planoId ?? null,
   }
 }
 
@@ -69,15 +90,13 @@ function normalizeAsaas(body: Record<string, unknown>): NormalizedPayload | null
   const payment = body.payment as Record<string, unknown>
   if (!payment) return null
 
-  const statusMap: Record<string, StatusPagamento> = {
+  const statusPagMap: Record<string, StatusPagamento> = {
     PAYMENT_CONFIRMED: StatusPagamento.APROVADO,
     PAYMENT_RECEIVED: StatusPagamento.APROVADO,
     PAYMENT_OVERDUE: StatusPagamento.RECUSADO,
-    PAYMENT_DELETED: StatusPagamento.RECUSADO,
     PAYMENT_REFUNDED: StatusPagamento.REEMBOLSADO,
   }
-
-  const assinaturaMap: Record<string, StatusAssinatura> = {
+  const statusAssMap: Record<string, StatusAssinatura> = {
     PAYMENT_CONFIRMED: StatusAssinatura.ATIVA,
     PAYMENT_RECEIVED: StatusAssinatura.ATIVA,
     PAYMENT_OVERDUE: StatusAssinatura.SUSPENSA,
@@ -85,11 +104,14 @@ function normalizeAsaas(body: Record<string, unknown>): NormalizedPayload | null
 
   return {
     gatewaySubscriptionId: (payment.subscription as string) ?? null,
+    gatewayCustomerId: (payment.customer as string) ?? null,
     gatewayPaymentId: (payment.id as string) ?? null,
     valor: typeof payment.value === 'number' ? Math.round(payment.value * 100) : 0,
-    status: statusMap[evento] ?? StatusPagamento.PENDENTE,
+    status: statusPagMap[evento] ?? StatusPagamento.PENDENTE,
     evento,
-    novoStatusAssinatura: assinaturaMap[evento] ?? null,
+    novoStatusAssinatura: statusAssMap[evento] ?? null,
+    tenantId: null,
+    planoId: null,
   }
 }
 
@@ -107,39 +129,43 @@ export async function POST(
     return Response.json({ error: 'Payload inválido' }, { status: 400 })
   }
 
-  // Verificar autenticidade do webhook por gateway
   let valid = false
   if (gateway === 'stripe') valid = await verifyStripe(request, rawBody)
   else if (gateway === 'asaas') valid = await verifyAsaas(request)
-  else if (gateway === 'mercadopago') valid = await verifyMercadoPago(request)
   else return Response.json({ error: 'Gateway não suportado' }, { status: 400 })
 
   if (!valid) return Response.json({ error: 'Assinatura inválida' }, { status: 401 })
 
-  // Normalizar payload
   let normalized: NormalizedPayload | null = null
   if (gateway === 'stripe') normalized = normalizeStripe(body)
   else if (gateway === 'asaas') normalized = normalizeAsaas(body)
 
-  if (!normalized) {
-    // Evento desconhecido — registrar e ignorar
-    console.log(`[webhook/${gateway}] evento ignorado:`, body)
-    return Response.json({ ok: true })
-  }
+  if (!normalized) return Response.json({ ok: true }) // evento não tratado
 
-  // Buscar assinatura pelo gatewaySubscriptionId
-  let assinatura = normalized.gatewaySubscriptionId
-    ? await prisma.assinatura.findFirst({
-        where: { gatewaySubscriptionId: normalized.gatewaySubscriptionId },
-      })
-    : null
+  // ── Buscar assinatura ─────────────────────────────────────────────────────────
+  // 1. Pelo tenantId no metadata (checkout.session.completed tem isso)
+  // 2. Pelo gatewaySubscriptionId
+  // 3. Pelo gatewayCustomerId
+  let assinatura = null
+
+  if (normalized.tenantId) {
+    assinatura = await prisma.assinatura.findUnique({ where: { tenantId: normalized.tenantId } })
+  }
+  if (!assinatura && normalized.gatewaySubscriptionId) {
+    assinatura = await prisma.assinatura.findFirst({ where: { gatewaySubscriptionId: normalized.gatewaySubscriptionId } })
+  }
+  if (!assinatura && normalized.gatewayCustomerId) {
+    assinatura = await prisma.assinatura.findFirst({ where: { gatewayCustomerId: normalized.gatewayCustomerId } })
+  }
 
   if (!assinatura) {
-    console.warn(`[webhook/${gateway}] assinatura não encontrada para subscriptionId=${normalized.gatewaySubscriptionId}`)
+    console.warn(`[webhook/${gateway}] assinatura não encontrada`, { normalized })
     return Response.json({ ok: true })
   }
 
-  // Registrar pagamento
+  // ── Registrar pagamento ───────────────────────────────────────────────────────
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'webhook'
+
   const pagamento = await prisma.pagamentoLog.create({
     data: {
       assinaturaId: assinatura.id,
@@ -154,49 +180,46 @@ export async function POST(
     },
   })
 
-  // Atualizar status da assinatura se necessário
+  // ── Atualizar assinatura ──────────────────────────────────────────────────────
+  const updateData: Record<string, unknown> = {}
+
+  if (normalized.gatewaySubscriptionId && !assinatura.gatewaySubscriptionId) {
+    updateData.gatewaySubscriptionId = normalized.gatewaySubscriptionId
+  }
+  if (normalized.gatewayCustomerId && !assinatura.gatewayCustomerId) {
+    updateData.gatewayCustomerId = normalized.gatewayCustomerId
+  }
+  if (!assinatura.gateway) updateData.gateway = gateway
+
   if (normalized.novoStatusAssinatura && normalized.novoStatusAssinatura !== assinatura.status) {
-    const updateData: Record<string, unknown> = { status: normalized.novoStatusAssinatura }
+    updateData.status = normalized.novoStatusAssinatura
     if (normalized.novoStatusAssinatura === StatusAssinatura.CANCELADA) {
       updateData.canceladaEm = new Date()
     }
-    assinatura = await prisma.assinatura.update({
-      where: { id: assinatura.id },
-      data: updateData,
-    })
-
-    const acaoMap: Record<StatusAssinatura, AuditAcao> = {
-      ATIVA: AuditAcao.ASSINATURA_ATUALIZADA,
-      TRIAL: AuditAcao.ASSINATURA_ATUALIZADA,
-      SUSPENSA: AuditAcao.ASSINATURA_ATUALIZADA,
-      CANCELADA: AuditAcao.ASSINATURA_CANCELADA,
-      EXPIRADA: AuditAcao.ASSINATURA_EXPIRADA,
-    }
-
-    await prisma.auditLog.create({
-      data: {
-        tenantId: assinatura.tenantId,
-        userId: null,
-        acao: acaoMap[normalized.novoStatusAssinatura],
-        recursoTipo: 'Assinatura',
-        recursoId: assinatura.id,
-        ip: request.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'webhook',
-        userAgent: gateway,
-      },
-    })
   }
 
-  await prisma.auditLog.create({
-    data: {
-      tenantId: assinatura.tenantId,
-      userId: null,
-      acao: AuditAcao.PAGAMENTO_REGISTRADO,
-      recursoTipo: 'PagamentoLog',
-      recursoId: pagamento.id,
-      ip: request.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'webhook',
-      userAgent: gateway,
-    },
-  })
+  if (Object.keys(updateData).length) {
+    await prisma.assinatura.update({ where: { id: assinatura.id }, data: updateData })
+  }
+
+  const acaoMap: Record<StatusAssinatura, AuditAcao> = {
+    ATIVA: AuditAcao.ASSINATURA_ATUALIZADA,
+    TRIAL: AuditAcao.ASSINATURA_ATUALIZADA,
+    SUSPENSA: AuditAcao.ASSINATURA_ATUALIZADA,
+    CANCELADA: AuditAcao.ASSINATURA_CANCELADA,
+    EXPIRADA: AuditAcao.ASSINATURA_EXPIRADA,
+  }
+
+  await Promise.all([
+    prisma.auditLog.create({
+      data: { tenantId: assinatura.tenantId, userId: null, acao: AuditAcao.PAGAMENTO_REGISTRADO, recursoTipo: 'PagamentoLog', recursoId: pagamento.id, ip, userAgent: gateway },
+    }),
+    ...(normalized.novoStatusAssinatura ? [
+      prisma.auditLog.create({
+        data: { tenantId: assinatura.tenantId, userId: null, acao: acaoMap[normalized.novoStatusAssinatura], recursoTipo: 'Assinatura', recursoId: assinatura.id, ip, userAgent: gateway },
+      }),
+    ] : []),
+  ])
 
   return Response.json({ ok: true })
 }

@@ -259,12 +259,28 @@ model Plano {
   precoAnual       Int?      // em centavos (null = não aplicável)
   limiteUsuarios   Int?      // null = ilimitado
   limiteDsfsMes    Int?      // null = ilimitado
-  trialDias        Int?      // apenas para tipo TRIAL
-  ativo            Boolean   @default(true)
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  trialDias            Int?      // apenas para tipo TRIAL
+  ativo                Boolean   @default(true)
+  stripeMonthlyPriceId String?   // Stripe Price ID para cobrança mensal
+  stripeAnnualPriceId  String?   // Stripe Price ID para cobrança anual
+  stripeOnetimePriceId String?   // Stripe Price ID para pagamento único (vitalício)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   assinaturas Assinatura[]
+}
+
+model GatewayConfig {
+  id                     String   @id @default(uuid())
+  gateway                String   @unique  // "stripe" | "asaas" | "mercadopago"
+  label                  String
+  secretKeyEncrypted     String?
+  webhookSecretEncrypted String?
+  publicKey              String?
+  ativo                  Boolean  @default(false)
+  modoTeste              Boolean  @default(true)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 }
 
 model Assinatura {

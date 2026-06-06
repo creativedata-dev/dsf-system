@@ -2,6 +2,47 @@
 
 import { useState, useEffect, useCallback } from 'react'
 
+/* ─── CheckoutButton ─────────────────────────────────────────────────────────── */
+
+function CheckoutButton({ tenantId, planoId }: { tenantId: string; planoId: string }) {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleCheckout(cadencia: 'mensal' | 'anual' | 'unico') {
+    setLoading(true); setError('')
+    try {
+      const res = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenantId, planoId, cadencia }),
+      })
+      const json = await res.json()
+      if (!res.ok) { setError(json.error ?? 'Erro ao gerar link'); return }
+      window.open(json.url, '_blank')
+    } catch { setError('Falha ao gerar link de pagamento') }
+    finally { setLoading(false) }
+  }
+
+  return (
+    <div className="pt-1">
+      <p className="text-xs font-medium text-slate-500 mb-2">Gerar link de pagamento (Stripe)</p>
+      <div className="flex gap-2 flex-wrap">
+        {[
+          { label: '💳 Mensal', cadencia: 'mensal' as const },
+          { label: '📅 Anual', cadencia: 'anual' as const },
+          { label: '♾️ Vitalício', cadencia: 'unico' as const },
+        ].map(({ label, cadencia }) => (
+          <button key={cadencia} onClick={() => handleCheckout(cadencia)} disabled={loading}
+            className="flex-1 py-2 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-lg hover:bg-blue-100 disabled:opacity-50">
+            {loading ? '…' : label}
+          </button>
+        ))}
+      </div>
+      {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+    </div>
+  )
+}
+
 /* ─── Types ──────────────────────────────────────────────────────────────────── */
 
 interface TenantItem {
@@ -706,6 +747,11 @@ export function TenantsClient() {
                           className="w-full py-2.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50">
                           {assinaturaSaving ? 'Salvando…' : assinatura ? 'Salvar Alterações' : 'Criar Assinatura'}
                         </button>
+
+                        {/* Link de pagamento Stripe */}
+                        {assinaturaForm.planoId && detailTenant && (
+                          <CheckoutButton tenantId={detailTenant.id} planoId={assinaturaForm.planoId} />
+                        )}
                       </div>
 
                       {/* Histórico de pagamentos */}
