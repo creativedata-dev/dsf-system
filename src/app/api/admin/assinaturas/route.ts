@@ -98,6 +98,7 @@ export async function POST(request: NextRequest) {
       where: { id: saved.id },
       include: { plano: true, pagamentos: { orderBy: { createdAt: 'desc' }, take: 50 } },
     })
+    if (!assinatura) return Response.json({ error: 'Erro ao recuperar assinatura criada' }, { status: 500 })
 
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown'
     await prisma.auditLog.create({
