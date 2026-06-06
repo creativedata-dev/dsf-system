@@ -89,12 +89,11 @@ export async function POST(request: NextRequest) {
       obs: body.obs?.trim() ?? null,
     }
 
-    const assinatura = await prisma.assinatura.upsert({
-      where: { tenantId: body.tenantId },
-      create: { tenantId: body.tenantId, ...data },
-      update: data,
-      include: { plano: true },
-    })
+    // NeonHttp não suporta transações — upsert manual com find + create/update
+    const existing = await prisma.assinatura.findUnique({ where: { tenantId: body.tenantId } })
+    const assinatura = existing
+      ? await prisma.assinatura.update({ where: { tenantId: body.tenantId }, data, include: { plano: true } })
+      : await prisma.assinatura.create({ data: { tenantId: body.tenantId, ...data }, include: { plano: true } })
 
     const ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown'
     await prisma.auditLog.create({
