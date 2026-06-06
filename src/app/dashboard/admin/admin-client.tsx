@@ -23,18 +23,20 @@ const ALL_PERMISSIONS: { value: string; label: string }[] = [
   { value: 'DSF_EMITIR',         label: 'Emitir DSF' },
   { value: 'DSF_CANCELAR',       label: 'Cancelar DSF' },
   { value: 'ANVISA_RELATORIOS',   label: 'Relatórios ANVISA' },
-  { value: 'DRIVE_CONFIGURAR',    label: 'Configurar Drive' },
-  { value: 'SUPER_ADMIN_GLOBAIS', label: 'Super Admin' },
+  { value: 'DRIVE_CONFIGURAR',       label: 'Configurar Drive' },
+  { value: 'TEMPERATURA_GERENCIAR',  label: 'Gerenciar Temperatura' },
+  { value: 'SUPER_ADMIN_GLOBAIS',    label: 'Super Admin' },
 ]
 
 const PERM_COLORS: Record<string, string> = {
-  SUPER_ADMIN_GLOBAIS: 'bg-purple-100 text-purple-700',
-  ANVISA_RELATORIOS:   'bg-blue-100 text-blue-700',
-  DSF_CANCELAR:        'bg-red-100 text-red-700',
-  DSF_EMITIR:          'bg-green-100 text-green-700',
-  DRIVE_CONFIGURAR:    'bg-amber-100 text-amber-700',
-  CLIENTE_CADASTRAR:   'bg-indigo-100 text-indigo-700',
-  CLIENTE_BUSCAR:      'bg-slate-100 text-slate-600',
+  SUPER_ADMIN_GLOBAIS:  'bg-purple-100 text-purple-700',
+  ANVISA_RELATORIOS:    'bg-blue-100 text-blue-700',
+  DSF_CANCELAR:         'bg-red-100 text-red-700',
+  DSF_EMITIR:           'bg-green-100 text-green-700',
+  DRIVE_CONFIGURAR:     'bg-amber-100 text-amber-700',
+  CLIENTE_CADASTRAR:    'bg-indigo-100 text-indigo-700',
+  CLIENTE_BUSCAR:       'bg-slate-100 text-slate-600',
+  TEMPERATURA_GERENCIAR:'bg-cyan-100 text-cyan-700',
 }
 
 const PERM_LABEL: Record<string, string> = Object.fromEntries(
