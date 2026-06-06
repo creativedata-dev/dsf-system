@@ -48,21 +48,23 @@ export async function PATCH(
   if (body.gatewaySubscriptionId !== undefined) data.gatewaySubscriptionId = body.gatewaySubscriptionId
   if (body.obs !== undefined) data.obs = body.obs?.trim() || null
 
-  const assinatura = await prisma.assinatura.update({
-    where: { id },
-    data,
-    include: { plano: true, pagamentos: { orderBy: { createdAt: 'desc' }, take: 50 } },
-  })
+  await prisma.assinatura.update({ where: { id }, data })
 
   const acao = body.status === 'CANCELADA' ? AuditAcao.ASSINATURA_CANCELADA : AuditAcao.ASSINATURA_ATUALIZADA
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? 'unknown'
-  await prisma.auditLog.create({
-    data: {
-      tenantId: assinatura.tenantId, userId: session.user.id,
-      acao, recursoTipo: 'Assinatura', recursoId: id,
-      ip, userAgent: request.headers.get('user-agent') ?? 'unknown',
-    },
-  })
+  const [assinatura] = await Promise.all([
+    prisma.assinatura.findUnique({
+      where: { id },
+      include: { plano: true, pagamentos: { orderBy: { createdAt: 'desc' }, take: 50 } },
+    }),
+    prisma.auditLog.create({
+      data: {
+        tenantId: existing.tenantId, userId: session.user.id,
+        acao, recursoTipo: 'Assinatura', recursoId: id,
+        ip, userAgent: request.headers.get('user-agent') ?? 'unknown',
+      },
+    }),
+  ])
 
   return Response.json({ assinatura })
 }
