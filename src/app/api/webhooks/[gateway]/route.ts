@@ -13,7 +13,7 @@ async function verifyStripe(request: NextRequest, rawBody: string): Promise<bool
     const webhookSecret = await getStripeWebhookSecret()
     const stripe = await getStripe()
 
-    stripe.webhooks.constructEvent(rawBody, sig, webhookSecret)
+    stripe.webhooks.constructEvent(rawBody, sig, webhookSecret, 600) // 10min tolerance
     return true
   } catch (e) {
     console.error('[webhook/stripe] verificacao falhou:', e instanceof Error ? e.message : e)
