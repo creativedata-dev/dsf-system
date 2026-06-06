@@ -1,7 +1,7 @@
 # Roadmap de Produto — FarmaSign
 
 Baseado no Plano de Expansao RDC 44/2009.  
-Ultima atualizacao: 06/06/2026.
+Ultima atualizacao: 06/06/2026 — Modulos 1.1 e 1.2 entregues.
 
 ---
 
@@ -21,6 +21,9 @@ Funcionalidades entregues e operacionais em `app.farmasign.com.br`:
 - [x] Integracao Stripe com webhook
 - [x] PWA (instalavel no celular)
 - [x] Dashboard SaaS para gestao de assinantes
+- [x] Sistema de modulos por tenant (gerenciador super admin + slug por feature)
+- [x] Controle de Temperatura e Umidade (Modulo 1.1)
+- [x] Gestao de Equipamentos e Calibracao (Modulo 1.2)
 
 ---
 
@@ -28,7 +31,7 @@ Funcionalidades entregues e operacionais em `app.farmasign.com.br`:
 **Prazo estimado:** 6-8 semanas  
 **Impacto:** Critico — item mais cobrado em vistorias da Vigilancia Sanitaria
 
-### 1.1 Controle de Temperatura e Umidade
+### 1.1 Controle de Temperatura e Umidade ✅ Entregue
 
 **Por que e critico:**  
 A ausencia de registro de termo-higrometria e o motivo numero 1 de autuacao. Exigido para geladeiras de termolabeis, sala de injetaveis e area de dispensacao.
@@ -96,7 +99,7 @@ Fluxo de registro em no maximo 3 toques: selecionar ambiente → digitar tempera
 
 ---
 
-### 1.2 Gestao de Equipamentos e Calibracao
+### 1.2 Gestao de Equipamentos e Calibracao ✅ Entregue
 
 **Por que e importante:**  
 Esfigmomanometro, glicosimetro, termometro e balanca precisam de laudo de calibracao anual. Equipamento sem laudo = multa por equipamento.
@@ -285,8 +288,8 @@ Os PDFs gerados para vistoria devem ter:
 
 Antes de iniciar a Fase 1:
 
-- [ ] Decidir modelo de armazenamento de PDFs de laudos (Google Drive por tenant ja existe)
-- [ ] Definir politica de alertas: in-app apenas ou email tambem (ex: Resend/SendGrid)
+- [x] Armazenamento de PDFs de laudos — Google Drive por tenant (ja implementado)
+- [x] Politica de alertas — in-app apenas (cron diario gera AuditLog)
 - [ ] Confirmar retencao 5 anos com Neon (custo de storage)
 - [ ] Definir se Painel do Fiscal precisa de link publico (implica rota sem autenticacao com token temporario)
 

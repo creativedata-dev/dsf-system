@@ -2,7 +2,7 @@
 
 ## Visao Geral
 
-SaaS multi-tenant para drogarias emitirem, armazenarem e auditarem **Declaracoes de Servicos Farmaceuticos (DSF)** em conformidade com ANVISA RDC 44/2009 e LGPD (Lei 13.709/2018).
+SaaS multi-tenant para drogarias gerenciarem conformidade com ANVISA RDC 44/2009 e LGPD (Lei 13.709/2018): emissao de DSF, controle de temperatura/umidade, gestao de equipamentos e calibracao.
 
 URL de producao: `https://app.farmasign.com.br`
 
@@ -41,6 +41,9 @@ Tenant (1)
   ├── DriveCredential (0-1)
   ├── Assinatura (0-1)
   ├── ProcedimentoConfig (N)
+  ├── Ambiente (N)
+  │     └── RegistroTermoHigrometria (N)
+  ├── Equipamento (N)
   └── AuditLog (N)
 
 Plano (N) ──► Assinatura (N)
@@ -66,6 +69,8 @@ Em vez de roles fixas, cada usuario tem um array de permissoes explicitamente co
 | `DSF_CANCELAR` | Cancelar DSFs emitidas |
 | `ANVISA_RELATORIOS` | Historico para fiscalizacao + assinar DSF como RT |
 | `DRIVE_CONFIGURAR` | Conectar Google Drive e configurar procedimentos |
+| `TEMPERATURA_GERENCIAR` | Cadastrar e editar ambientes monitorados |
+| `EQUIPAMENTOS_GERENCIAR` | Cadastrar, editar equipamentos e fazer upload de laudos/fotos |
 | `SUPER_ADMIN_GLOBAIS` | Gestao global de tenants, planos, gateways |
 
 ### Perfis Tipicos
@@ -74,7 +79,7 @@ Em vez de roles fixas, cada usuario tem um array de permissoes explicitamente co
 |---|---|
 | Atendente de balcao | `CLIENTE_BUSCAR`, `CLIENTE_CADASTRAR`, `DSF_EMITIR` |
 | Responsavel Tecnico (farmaceutico) | + `ANVISA_RELATORIOS` |
-| Gerente / Admin | + `DSF_CANCELAR`, `DRIVE_CONFIGURAR` |
+| Gerente / Admin | + `DSF_CANCELAR`, `DRIVE_CONFIGURAR`, `TEMPERATURA_GERENCIAR`, `EQUIPAMENTOS_GERENCIAR` |
 | Super Admin SaaS | Todas |
 
 ### JWT — Re-fetch no banco a cada request
@@ -95,6 +100,29 @@ async jwt({ token, user }) {
   return token
 }
 ```
+
+---
+
+## Sistema de Modulos por Tenant
+
+Cada tenant tem um campo `modulosHabilitados String[]` que controla quais features estao acessiveis. O super admin gerencia os modulos via aba "Modulos" no painel de tenants.
+
+**Modulos disponiveis** (`src/lib/modulos.ts`):
+
+| Slug | Label | Rota protegida |
+|---|---|---|
+| `DSF` | Emissao DSF | — (condicional no nav) |
+| `TEMPERATURA` | Temperatura e Umidade | `/dashboard/temperatura` |
+| `EQUIPAMENTOS` | Equipamentos e Calibracao | `/dashboard/equipamentos` |
+| `POPS` | POPs e Treinamentos | `/dashboard/pops` (futuro) |
+| `PAINEL_FISCAL` | Painel do Fiscal | `/dashboard/fiscal` (futuro) |
+
+**Retrocompatibilidade:** array vazio = todos os modulos habilitados (tenants legados nao sao afetados).
+
+**Aplicacao:**
+- `hasModulo(modulosHabilitados, slug)` — unica fonte de verdade (`src/lib/modulos.ts`)
+- Nav items ocultos no `DashboardShell` se modulo desabilitado
+- `layout.tsx` de cada modulo redireciona para `/dashboard` se desabilitado (protecao server-side)
 
 ---
 
@@ -262,9 +290,14 @@ src/
       procedimentos/        Procedimentos ativos do tenant (uso client)
       integrations/
         google-drive/       OAuth redirect, callback, status, disconnect
+      ambientes/            CRUD de ambientes monitorados
+      temperatura/          Lancamento, historico, export PDF, upload foto
+      equipamentos/         CRUD equipamentos, upload laudo/foto
       cron/
         cleanup-dsf/        Cancela DSFs EMITIDA > 24h
         expirar-assinaturas/ Marca assinaturas expiradas
+        alertas-temperatura/ Verifica omissoes de leitura do dia anterior
+        alertas-equipamentos/ Atualiza status VENCENDO/VENCIDO
     auth/login/             Pagina de login
     dashboard/
       layout.tsx            Shell + verificacao de assinatura (Server)
@@ -281,6 +314,8 @@ src/
       saas/                 Dashboard administrativo SaaS (metricas)
       assinatura-expirada/  Tela de bloqueio por assinatura expirada
       configuracoes/        Integracao Google Drive
+      temperatura/          Lancamentos + ambientes + historico + export PDF
+      equipamentos/         Lista + CRUD + upload laudo/foto
   components/
     dashboard-shell.tsx     Layout responsivo + badge de assinatura
     pwa-register.tsx        Registro do service worker (client)
@@ -292,7 +327,9 @@ src/
     stripe.ts               Inicializa Stripe com chave do banco
     tipo-servico.ts         Labels dos TipoServico (client-safe)
     crypto.ts               AES-256-GCM encrypt/decrypt
-    drive.ts                Upload Drive com refresh de token
+    drive.ts                Upload Drive com refresh de token (PDF e imagem)
+    modulos.ts              Definicao dos modulos e helper hasModulo()
+    pdf-temperatura.ts      Gerador PDF de historico de temperatura (pdf-lib)
   types/
     next-auth.d.ts          Augmentacao de tipos NextAuth
   generated/prisma/         Cliente Prisma gerado (npx prisma generate)

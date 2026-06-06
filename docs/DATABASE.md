@@ -19,6 +19,9 @@ Tenant (1)
   ├── Assinatura (0-1)  ──► Plano
   │     └── PagamentoLog (N)
   ├── ProcedimentoConfig (N)
+  ├── Ambiente (N)
+  │     └── RegistroTermoHigrometria (N)
+  ├── Equipamento (N)
   └── AuditLog (N)
 
 Plano (N)          — configuracao global, sem tenantId
@@ -31,9 +34,11 @@ GatewayConfig (N)  — configuracao global, sem tenantId
 
 ### `Permission`
 ```
-CLIENTE_BUSCAR    CLIENTE_CADASTRAR
-DSF_EMITIR        DSF_CANCELAR
-ANVISA_RELATORIOS DRIVE_CONFIGURAR
+CLIENTE_BUSCAR       CLIENTE_CADASTRAR
+DSF_EMITIR           DSF_CANCELAR
+ANVISA_RELATORIOS    DRIVE_CONFIGURAR
+TEMPERATURA_GERENCIAR
+EQUIPAMENTOS_GERENCIAR
 SUPER_ADMIN_GLOBAIS
 ```
 
@@ -89,6 +94,9 @@ CRON_CLEANUP_DSF
 ASSINATURA_CRIADA  ASSINATURA_ATUALIZADA  ASSINATURA_CANCELADA  ASSINATURA_EXPIRADA
 PAGAMENTO_REGISTRADO
 PLANO_CRIADO  PLANO_ATUALIZADO
+AMBIENTE_CRIADO  AMBIENTE_ATUALIZADO
+TEMPERATURA_REGISTRADA  CRON_ALERTAS_TEMPERATURA
+EQUIPAMENTO_CRIADO  EQUIPAMENTO_ATUALIZADO  CRON_ALERTAS_EQUIPAMENTOS
 ```
 
 ---
@@ -272,6 +280,69 @@ Se nenhuma config existir para um tenant, todos os servicos aparecem ativos por 
 | `recursoId` | String | UUID do recurso |
 | `ip` | String | IP real (`x-forwarded-for`) |
 | `userAgent` | String | |
+
+---
+
+### `Ambiente`
+| Campo | Tipo | Descricao |
+|---|---|---|
+| `tenantId` | FK Tenant | |
+| `nome` | String | Ex: "Geladeira de Termolabeis" |
+| `tipo` | String | `GELADEIRA` \| `AMBIENTE` \| `SALA_ESPECIAL` |
+| `tempMin` | Float | Limite inferior em °C |
+| `tempMax` | Float | Limite superior em °C |
+| `umidadeMin` | Float? | null para geladeiras |
+| `umidadeMax` | Float? | |
+| `ativo` | Boolean | Soft-delete |
+
+---
+
+### `RegistroTermoHigrometria`
+| Campo | Tipo | Descricao |
+|---|---|---|
+| `ambienteId` | FK Ambiente | |
+| `tenantId` | FK Tenant | Desnormalizado para queries rapidas |
+| `dataLeitura` | Date | `@db.Date` |
+| `periodo` | String | `MANHA` \| `TARDE` |
+| `temperaturaGraus` | Float | |
+| `umidadePercent` | Float? | |
+| `usuarioId` | String | Quem registrou |
+| `alertaDisparado` | Boolean | Verdadeiro se fora dos limites do ambiente |
+| `observacao` | String? | |
+| `fotoFileId` | String? | ID da foto no Google Drive |
+| `fotoUrl` | String? | Link publico da foto no Drive |
+
+**Unique:** `[ambienteId, dataLeitura, periodo]` — impede lancamento duplo  
+**Indice:** `[tenantId, dataLeitura DESC]`
+
+---
+
+### `Equipamento`
+| Campo | Tipo | Descricao |
+|---|---|---|
+| `tenantId` | FK Tenant | |
+| `nome` | String | Ex: "Esfigmomanometro Adulto" |
+| `marcaModelo` | String | |
+| `numeroSerie` | String? | |
+| `dataUltimaCalibracao` | Date | `@db.Date` |
+| `dataProximaCalibracao` | Date | `@db.Date` — base do status automatico |
+| `status` | String | `ATIVO` \| `VENCENDO` \| `VENCIDO` \| `MANUTENCAO` — atualizado pelo cron diario |
+| `laudoDriveFileId` | String? | ID do certificado de calibracao PDF no Drive |
+| `laudoUrl` | String? | Link do certificado no Drive |
+| `numeroCertificado` | String? | Numero do certificado emitido pelo laboratorio |
+| `laboratorio` | String? | Nome do laboratorio/tecnico responsavel |
+| `fotoFileId` | String? | ID da foto do equipamento/lacre no Drive |
+| `fotoUrl` | String? | Link publico da foto no Drive |
+| `obs` | String? | |
+| `ativo` | Boolean | Soft-delete |
+
+**Status automatico (cron 08:00 UTC):**
+- `proxima > hoje + 30d` → `ATIVO`
+- `proxima <= hoje + 30d` → `VENCENDO`
+- `proxima < hoje` → `VENCIDO`
+- `MANUTENCAO` — definido manualmente, nao sobrescrito pelo cron
+
+**Indices:** `[tenantId]`, `[dataProximaCalibracao]`
 
 ---
 

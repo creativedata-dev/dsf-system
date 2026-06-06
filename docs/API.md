@@ -256,3 +256,81 @@ Cancela DSFs com status `EMITIDA` ha mais de 24h (abandono).
 Marca como `EXPIRADA` toda assinatura TRIAL/ATIVA com `expiraEm` no passado.
 **Auth:** `Authorization: Bearer {CRON_SECRET}`
 **Schedule:** 04:00 UTC diario
+
+### `GET /api/cron/alertas-temperatura`
+Verifica ambientes sem leitura MANHA ou TARDE no dia anterior, registra `AuditLog` por omissao.
+**Schedule:** 08:00 UTC diario
+
+### `GET /api/cron/alertas-equipamentos`
+Recalcula status de todos os equipamentos ativos (exceto MANUTENCAO) com base em `dataProximaCalibracao`.
+Atualiza para `ATIVO`, `VENCENDO` (≤30 dias) ou `VENCIDO`.
+**Schedule:** 08:00 UTC diario
+
+---
+
+## Temperatura e Umidade
+
+### `GET /api/ambientes`
+Lista ambientes ativos do tenant.
+**Permissao:** qualquer usuario autenticado
+
+### `POST /api/ambientes`
+Cadastra ambiente.
+**Permissao:** `TEMPERATURA_GERENCIAR`
+**Body:** `nome`, `tipo` (GELADEIRA|AMBIENTE|SALA_ESPECIAL), `tempMin`, `tempMax`, `umidadeMin?`, `umidadeMax?`
+
+### `PATCH /api/ambientes/{id}`
+Edita ou desativa ambiente.
+**Permissao:** `TEMPERATURA_GERENCIAR`
+
+### `POST /api/temperatura`
+Registra leitura de temperatura.
+**Permissao:** qualquer usuario autenticado
+**Body:** `ambienteId`, `dataLeitura`, `periodo` (MANHA|TARDE), `temperaturaGraus`, `umidadePercent?`, `observacao?`
+**Retorna:** `{ id, alertaDisparado, ... }` — `alertaDisparado: true` se temperatura fora dos limites do ambiente
+**Conflito:** `409` se ja existe leitura para esse ambiente+data+periodo
+
+### `GET /api/temperatura/historico`
+Historico de leituras com filtros.
+**Query:** `ambienteId?`, `dataInicio`, `dataFim`
+**Retorna:** registros enriquecidos com `nomeUsuario` e `fotoUrl`
+
+### `GET /api/temperatura/export`
+Gera PDF de historico para vistoria (pdf-lib, server-side).
+**Query:** mesmos filtros do historico
+**Content-Type:** `application/pdf`
+
+### `POST /api/temperatura/foto`
+Faz upload de foto de uma leitura para o Google Drive.
+**Body:** `multipart/form-data` — `registroId`, `foto` (JPEG/PNG/WebP/HEIC, max 10 MB)
+**Nota:** Drive precisa estar configurado para o tenant
+
+---
+
+## Equipamentos e Calibracao
+
+### `GET /api/equipamentos`
+Lista equipamentos ativos do tenant, ordenados por `dataProximaCalibracao` ascendente.
+**Permissao:** qualquer usuario autenticado
+
+### `POST /api/equipamentos`
+Cadastra equipamento.
+**Permissao:** `EQUIPAMENTOS_GERENCIAR`
+**Body:** `nome`, `marcaModelo`, `dataUltimaCalibracao`, `dataProximaCalibracao`, `numeroSerie?`, `numeroCertificado?`, `laboratorio?`, `obs?`
+**Nota:** `status` e calculado automaticamente com base em `dataProximaCalibracao`
+
+### `PATCH /api/equipamentos/{id}`
+Edita equipamento ou altera status manualmente (para MANUTENCAO).
+**Permissao:** `EQUIPAMENTOS_GERENCIAR`
+**Nota:** se `dataProximaCalibracao` e alterada e `status != MANUTENCAO`, status e recalculado automaticamente
+
+### `POST /api/equipamentos/{id}/laudo`
+Upload do certificado de calibracao (PDF) para o Google Drive.
+**Permissao:** `EQUIPAMENTOS_GERENCIAR`
+**Body:** `multipart/form-data` — `laudo` (PDF, max 20 MB)
+**Nota:** substitui o laudo anterior no banco (arquivo antigo permanece no Drive)
+
+### `POST /api/equipamentos/{id}/foto`
+Upload da foto do equipamento/lacre de calibracao para o Google Drive.
+**Permissao:** `EQUIPAMENTOS_GERENCIAR`
+**Body:** `multipart/form-data` — `foto` (JPEG/PNG/WebP/HEIC, max 10 MB)
