@@ -17,7 +17,7 @@ async function main() {
   // ─── TENANT 1: SaaS Core (tenant administrativo do sistema) ──────────────────
 
   const tenantSaaS = await prisma.tenant.upsert({
-    where: { cnpj: '00.000.000/0000-00' },
+    where: { cnpj: '00000000000000' },
     update: {},
     create: {
       nomeFantasia: 'SaaS Core',
@@ -45,7 +45,7 @@ async function main() {
   // ─── TENANT 2: Drogaria Rio (primeiro cliente piloto) ────────────────────────
 
   const tenantDrogaria = await prisma.tenant.upsert({
-    where: { cnpj: '00.000.000/0001-00' },
+    where: { cnpj: '00000000000100' },
     update: {},
     create: {
       nomeFantasia: 'Drogaria Rio',
