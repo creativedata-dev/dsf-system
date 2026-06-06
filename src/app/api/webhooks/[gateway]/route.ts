@@ -19,7 +19,6 @@ async function verifyStripe(request: NextRequest, rawBody: string): Promise<bool
     const tolerance = config?.modoTeste ? 0 : 300 // 0 = sem limite de tempo
 
     const webhookSecret = await getStripeWebhookSecret()
-    console.log('[webhook/stripe] secret prefix:', webhookSecret.slice(0, 12), '| tolerance:', tolerance)
     stripe.webhooks.constructEvent(rawBody, sig, webhookSecret, tolerance)
     return true
   } catch (e) {
