@@ -17,6 +17,7 @@ enum Permission {
   ANVISA_RELATORIOS
   DRIVE_CONFIGURAR
   TEMPERATURA_GERENCIAR
+  EQUIPAMENTOS_GERENCIAR
   SUPER_ADMIN_GLOBAIS
 }
 
@@ -72,6 +73,9 @@ enum AuditAcao {
   AMBIENTE_ATUALIZADO
   TEMPERATURA_REGISTRADA
   CRON_ALERTAS_TEMPERATURA
+  EQUIPAMENTO_CRIADO
+  EQUIPAMENTO_ATUALIZADO
+  CRON_ALERTAS_EQUIPAMENTOS
 }
 
 enum TipoPlano {
@@ -122,6 +126,7 @@ model Tenant {
   procedimentoConfigs  ProcedimentoConfig[]
   assinatura           Assinatura?
   ambientes            Ambiente[]
+  equipamentos         Equipamento[]
 }
 
 model User {
@@ -349,6 +354,28 @@ model Ambiente {
   tenant    Tenant @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
+}
+
+model Equipamento {
+  id                    String   @id @default(uuid())
+  tenantId              String
+  nome                  String
+  marcaModelo           String
+  numeroSerie           String?
+  dataUltimaCalibracao  DateTime @db.Date
+  dataProximaCalibracao DateTime @db.Date
+  status                String   @default("ATIVO") // "ATIVO" | "VENCENDO" | "VENCIDO" | "MANUTENCAO"
+  laudoDriveFileId      String?
+  laudoUrl              String?
+  obs                   String?
+  ativo                 Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([dataProximaCalibracao])
 }
 
 model RegistroTermoHigrometria {
