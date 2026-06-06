@@ -1,7 +1,6 @@
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { redirect } from 'next/navigation'
-import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
 import { DashboardShell } from '@/components/dashboard-shell'
 
@@ -25,19 +24,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
         }),
   ])
 
-  // Persiste o status da assinatura em cookie para o middleware Edge
-  if (!isSuperAdmin) {
-    const cookieStore = await cookies()
-    cookieStore.set('assinatura_status', assinatura?.status ?? 'SEM_ASSINATURA', {
-      httpOnly: true,
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 60 * 5, // 5 minutos — atualiza a cada visita ao dashboard
-    })
-
-    if (assinatura?.status === 'EXPIRADA' || assinatura?.status === 'CANCELADA') {
-      redirect('/dashboard/assinatura-expirada')
-    }
+  // Bloqueia acesso se assinatura expirada ou cancelada
+  if (!isSuperAdmin && (assinatura?.status === 'EXPIRADA' || assinatura?.status === 'CANCELADA')) {
+    redirect('/dashboard/assinatura-expirada')
   }
 
   return (
