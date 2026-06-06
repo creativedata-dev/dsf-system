@@ -1,7 +1,9 @@
-# Banco de Dados — DSF System
+# Banco de Dados — FarmaSign
 
-Neon PostgreSQL (serverless, regiao sa-east-1).  
-ORM: Prisma 7.x com adapter HTTP (`PrismaNeonHttp`) — sem conexoes persistentes (compativel com Vercel Serverless).
+Neon PostgreSQL (serverless, regiao sa-east-1).
+ORM: Prisma 7.x com adapter HTTP (`PrismaNeonHttp`) — sem conexoes persistentes.
+
+> **Restricao critica:** `upsert`, `createMany`, `updateMany` e `$transaction` nao funcionam com NeonHttp. Use `find + create/update` manual e `Promise.all` de operacoes individuais.
 
 ---
 
@@ -9,12 +11,18 @@ ORM: Prisma 7.x com adapter HTTP (`PrismaNeonHttp`) — sem conexoes persistente
 
 ```
 Tenant (1)
-  ├── User (N)              operadores do sistema
-  ├── Cliente (N)           pacientes da drogaria
-  ├── DSF (N)               declaracoes emitidas
-  │     └── InsumoDSF (N)   materiais utilizados por DSF
-  ├── DriveCredential (0-1) credenciais OAuth do Google Drive
-  └── AuditLog (N)          trilha de auditoria
+  ├── User (N)
+  ├── Cliente (N)
+  ├── DSF (N)
+  │     └── InsumoDSF (N)
+  ├── DriveCredential (0-1)
+  ├── Assinatura (0-1)  ──► Plano
+  │     └── PagamentoLog (N)
+  ├── ProcedimentoConfig (N)
+  └── AuditLog (N)
+
+Plano (N)          — configuracao global, sem tenantId
+GatewayConfig (N)  — configuracao global, sem tenantId
 ```
 
 ---
@@ -23,35 +31,50 @@ Tenant (1)
 
 ### `Permission`
 ```
-CLIENTE_BUSCAR
-CLIENTE_CADASTRAR
-DSF_EMITIR
-DSF_CANCELAR
-ANVISA_RELATORIOS
-DRIVE_CONFIGURAR
+CLIENTE_BUSCAR    CLIENTE_CADASTRAR
+DSF_EMITIR        DSF_CANCELAR
+ANVISA_RELATORIOS DRIVE_CONFIGURAR
 SUPER_ADMIN_GLOBAIS
 ```
 
 ### `TipoServico`
 ```
-AFERICAO_PRESSAO_ARTERIAL
-AFERICAO_TEMPERATURA
+AFERICAO_PRESSAO_ARTERIAL   AFERICAO_TEMPERATURA
 GLICEMIA_CAPILAR
-TESTE_RAPIDO_COVID19
-TESTE_RAPIDO_DENGUE
-TESTE_RAPIDO_INFLUENZA
-TESTE_RAPIDO_BETA_HCG
+TESTE_RAPIDO_COVID19        TESTE_RAPIDO_DENGUE
+TESTE_RAPIDO_INFLUENZA      TESTE_RAPIDO_BETA_HCG
 TESTE_RAPIDO_PERFIL_LIPIDICO
-ADMINISTRACAO_INJETAVEIS
-INALACAO_NEBULIZACAO
+ADMINISTRACAO_INJETAVEIS    INALACAO_NEBULIZACAO
 PERFURACAO_LOBULO
 ```
 
 ### `DsfStatus`
 ```
-EM_ANDAMENTO   upload pendente (Drive nao configurado ou falha)
-CONCLUIDA      PDF salvo no Drive com sucesso
-CANCELADA      cancelada manualmente ou pelo cron (timeout 24h)
+EMITIDA    upload pendente (aguardando digitalizacao do cupom)
+CONCLUIDA  PDF salvo no Drive com sucesso
+CANCELADA  cancelada manualmente ou pelo cron (timeout 24h)
+```
+
+### `TipoImpressao`
+```
+BOBINA_80MM   FOLHA_A4
+```
+
+### `TipoPlano`
+```
+TRIAL   MENSAL   ANUAL   VITALICIO
+```
+
+### `StatusAssinatura`
+```
+TRIAL      ATIVA      SUSPENSA
+CANCELADA  EXPIRADA
+```
+
+### `StatusPagamento`
+```
+PENDENTE   APROVADO   RECUSADO
+REEMBOLSADO   ESTORNADO
 ```
 
 ### `AuditAcao`
@@ -61,7 +84,11 @@ CLIENTE_CRIADO  CLIENTE_ATUALIZADO
 DSF_CRIADA  DSF_CONCLUIDA  DSF_CANCELADA  DSF_VISUALIZADA
 DRIVE_AUTORIZADO  DRIVE_REVOGADO
 USUARIO_CRIADO  USUARIO_ATUALIZADO
+TENANT_CRIADO  TENANT_ATUALIZADO
 CRON_CLEANUP_DSF
+ASSINATURA_CRIADA  ASSINATURA_ATUALIZADA  ASSINATURA_CANCELADA  ASSINATURA_EXPIRADA
+PAGAMENTO_REGISTRADO
+PLANO_CRIADO  PLANO_ATUALIZADO
 ```
 
 ---
@@ -74,11 +101,13 @@ CRON_CLEANUP_DSF
 | `id` | UUID PK | |
 | `nomeFantasia` | String | Nome exibido no sistema e no PDF |
 | `razaoSocial` | String | Razao social juridica |
-| `cnpj` | String UNIQUE | CNPJ formatado |
-| `endereco` | String | Endereco completo |
-| `telefone` | String | Telefone de contato |
+| `cnpj` | String UNIQUE | Somente digitos |
+| `endereco` | String | |
+| `telefone` | String | |
 | `alvaraSanitario` | String | Numero do alvara ANVISA |
-| `ativo` | Boolean | Tenant desativado nao consegue logar |
+| `logoUrl` | String? | Base64 WebP max 320x160px |
+| `tipoImpressao` | TipoImpressao | Default `BOBINA_80MM` |
+| `ativo` | Boolean | Tenant inativo nao consegue logar |
 
 ---
 
@@ -86,13 +115,13 @@ CRON_CLEANUP_DSF
 | Campo | Tipo | Descricao |
 |---|---|---|
 | `id` | UUID PK | |
-| `tenantId` | FK Tenant | Isolamento de dados |
+| `tenantId` | FK Tenant | |
 | `nome` | String | |
 | `email` | String | `@@unique([tenantId, email])` |
-| `senhaHash` | String | bcrypt hash |
-| `permissions` | Permission[] | Array — default `[CLIENTE_BUSCAR, DSF_EMITIR]` |
-| `crf` | String? | Numero CRF do farmaceutico (obrigatorio para `ANVISA_RELATORIOS`) |
-| `ativo` | Boolean | Usuarios desativados nao conseguem logar |
+| `senhaHash` | String | bcrypt hash (custo 12) |
+| `permissions` | Permission[] | Default `[CLIENTE_BUSCAR, DSF_EMITIR]` |
+| `crf` | String? | Obrigatorio para assinar DSF como RT |
+| `ativo` | Boolean | |
 
 ---
 
@@ -103,13 +132,12 @@ CRON_CLEANUP_DSF
 | `tenantId` | FK Tenant | |
 | `nome` | String | |
 | `cpf` | String | Somente digitos — `@@unique([tenantId, cpf])` |
-| `rg` | String? | |
-| `dataNascimento` | Date | `@db.Date` — sem fuso horario |
+| `dataNascimento` | Date | `@db.Date` |
 | `sexo` | String | `M`, `F` ou `Outro` |
 | `telefone` | String | |
 | `email` | String? | |
-| `endereco` | String | Endereco completo formatado em string unica |
-| `consentimentoLgpdAt` | DateTime | Timestamp do consentimento LGPD — obrigatorio |
+| `endereco` | String | |
+| `consentimentoLgpdAt` | DateTime | Obrigatorio LGPD |
 
 ---
 
@@ -123,58 +151,127 @@ CRON_CLEANUP_DSF
 | `responsavelTecnicoId` | FK User | Farmaceutico que assina |
 | `atendenteId` | FK User | Operador que emitiu |
 | `tipoServico` | TipoServico | |
-| `dataEmissao` | DateTime | `@default(now())` |
 | `observacoes` | String? | Anamnese livre |
-| `status` | DsfStatus | |
+| `status` | DsfStatus | Default `EMITIDA` |
 | `driveFileId` | String? | ID do arquivo no Google Drive |
 
-**Indices relevantes:**
-- `[tenantId, dataEmissao DESC]` — relatorio de fiscalizacao ANVISA
-- `[status, updatedAt]` — cron cleanup
-- `[clienteId]` — historico do paciente
+**Indices:** `[tenantId, dataEmissao DESC]`, `[status, updatedAt]`, `[clienteId]`
 
 ---
 
 ### `InsumoDSF`
 | Campo | Tipo | Descricao |
 |---|---|---|
-| `id` | UUID PK | |
 | `dsfId` | FK DSF | |
-| `nomeProduto` | String | Nome do material/reagente |
-| `lote` | String | Numero de lote (obrigatorio ANVISA) |
-| `fabricante` | String | Fabricante (obrigatorio ANVISA) |
-| `validade` | Date | `@db.Date` |
-| `quantidade` | Decimal(10,3) | Padrao 1.000 |
-| `unidade` | String | Padrao `"un"` |
+| `nomeProduto` | String | |
+| `lote` | String | Obrigatorio ANVISA |
+| `fabricante` | String | |
+| `validade` | Date | |
+| `quantidade` | Decimal(10,3) | |
+| `unidade` | String | Default `"un"` |
 
 ---
 
 ### `DriveCredential`
 | Campo | Tipo | Descricao |
 |---|---|---|
-| `id` | UUID PK | |
 | `tenantId` | FK Tenant UNIQUE | Um Drive por tenant |
 | `accessToken` | String | Criptografado AES-256-GCM |
 | `refreshToken` | String | Criptografado AES-256-GCM |
 | `tokenExpiry` | DateTime | Verificado antes de cada upload |
-| `driveFolderId` | String | ID da pasta raiz no Drive do tenant |
+| `driveFolderId` | String | ID da pasta raiz no Drive |
+| `driveEmail` | String? | Email da conta Google conectada |
+
+---
+
+### `ProcedimentoConfig`
+| Campo | Tipo | Descricao |
+|---|---|---|
+| `tenantId` | FK Tenant | |
+| `tipoServico` | TipoServico | `@@unique([tenantId, tipoServico])` |
+| `ativo` | Boolean | Default `true` — se `false`, servico some do select de emissao |
+| `textoOrientacao` | String? | Texto impresso abaixo do servico no DSF |
+
+Se nenhuma config existir para um tenant, todos os servicos aparecem ativos por padrao.
+
+---
+
+### `Plano`
+| Campo | Tipo | Descricao |
+|---|---|---|
+| `id` | UUID PK | |
+| `nome` | String | Ex: "Mensal", "Anual Plus" |
+| `tipo` | TipoPlano | |
+| `precoMensal` | Int? | Em centavos |
+| `precoAnual` | Int? | Em centavos |
+| `limiteUsuarios` | Int? | null = ilimitado |
+| `limiteDsfsMes` | Int? | null = ilimitado |
+| `trialDias` | Int? | Apenas para tipo TRIAL |
+| `ativo` | Boolean | Planos inativos nao aparecem no select |
+| `stripeMonthlyPriceId` | String? | Price ID Stripe (criado e salvo no primeiro checkout) |
+| `stripeAnnualPriceId` | String? | |
+| `stripeOnetimePriceId` | String? | Para vitalicio |
+
+---
+
+### `Assinatura`
+| Campo | Tipo | Descricao |
+|---|---|---|
+| `tenantId` | FK Tenant UNIQUE | Uma assinatura por tenant |
+| `planoId` | FK Plano | |
+| `status` | StatusAssinatura | Default `TRIAL` |
+| `inicioEm` | DateTime | |
+| `expiraEm` | DateTime? | null = vitalicio |
+| `trialExpiraEm` | DateTime? | |
+| `canceladaEm` | DateTime? | |
+| `motivoCancelamento` | String? | |
+| `gateway` | String? | `"stripe"`, `"asaas"`, etc. |
+| `gatewayCustomerId` | String? | Stripe customer_id |
+| `gatewaySubscriptionId` | String? | Stripe subscription_id |
+| `obs` | String? | Observacoes internas |
+
+**Indice:** `[status, expiraEm]` — cron de expiracao
+
+---
+
+### `PagamentoLog`
+| Campo | Tipo | Descricao |
+|---|---|---|
+| `assinaturaId` | FK Assinatura | |
+| `tenantId` | String | Desnormalizado para queries rapidas |
+| `valor` | Int | Em centavos |
+| `moeda` | String | Default `"BRL"` |
+| `status` | StatusPagamento | |
+| `gateway` | String | |
+| `gatewayPaymentId` | String? | ID do pagamento no gateway |
+| `descricao` | String? | Nome do evento (ex: `invoice.payment_succeeded`) |
+| `metadados` | Json? | Payload bruto do webhook |
+
+---
+
+### `GatewayConfig`
+| Campo | Tipo | Descricao |
+|---|---|---|
+| `gateway` | String UNIQUE | `"stripe"`, `"asaas"`, `"mercadopago"` |
+| `label` | String | Nome de exibicao |
+| `secretKeyEncrypted` | String? | Chave secreta criptografada AES-256-GCM |
+| `webhookSecretEncrypted` | String? | Webhook secret criptografado |
+| `publicKey` | String? | Publishable key (nao secreta) |
+| `ativo` | Boolean | Gateway inativo nao aceita pagamentos |
+| `modoTeste` | Boolean | Default `true` |
 
 ---
 
 ### `AuditLog`
 | Campo | Tipo | Descricao |
 |---|---|---|
-| `id` | UUID PK | |
-| `tenantId` | FK Tenant? | Null para acoes de sistema (cron) |
-| `userId` | FK User? | Null para acoes de sistema |
+| `tenantId` | FK Tenant? | null para acoes de sistema |
+| `userId` | FK User? | null para webhooks e crons |
 | `acao` | AuditAcao | |
-| `recursoTipo` | String | `"DSF"`, `"Cliente"`, etc. |
-| `recursoId` | String | UUID do recurso afetado |
+| `recursoTipo` | String | `"DSF"`, `"Assinatura"`, etc. |
+| `recursoId` | String | UUID do recurso |
 | `ip` | String | IP real (`x-forwarded-for`) |
 | `userAgent` | String | |
-| `createdAt` | DateTime | `@default(now())` |
-
-**Indice:** `[tenantId, createdAt DESC]` — paginacao do painel de auditoria
 
 ---
 
@@ -182,17 +279,23 @@ CRON_CLEANUP_DSF
 
 | Migration | Descricao |
 |---|---|
-| `20260527194031_init` | Schema inicial com Role (obsoleto) e TipoServico antigo |
-| `20260527205349_pbac_permissions` | Substituicao de `Role` por `Permission[]` |
-| `20260527215543_update_tipo_servico` | Novos valores de `TipoServico` conformes ANVISA |
+| `20260527194031_init` | Schema inicial |
+| `20260527205349_pbac_permissions` | Substituicao de Role por Permission[] |
+| `20260527215543_update_tipo_servico` | TipoServico conforme ANVISA |
+| `20260604_add_drive_email` | DriveCredential.driveEmail |
+| `20260604_add_tenant_audit_actions` | AuditAcao TENANT_* |
+| `20260604162025_add_procedimento_config` | Modelo ProcedimentoConfig |
+| `20260605193458_add_assinatura_plano_pagamento` | Plano, Assinatura, PagamentoLog, enums de pagamento |
+| `20260606031524_add_gateway_config_stripe_price_ids` | GatewayConfig + Price IDs no Plano |
 
-Para criar uma nova migration:
 ```bash
-npx prisma migrate dev --name descricao_da_mudanca
-```
+# Aplicar todas as migrations
+npx prisma migrate deploy
 
-Para regenerar o cliente Prisma apos alteracao do schema:
-```bash
+# Nova migration (desenvolvimento)
+npx prisma migrate dev --name descricao
+
+# Regenerar cliente Prisma
 npx prisma generate
 ```
 
@@ -202,15 +305,17 @@ npx prisma generate
 
 Arquivo: `prisma/seed.ts`
 
-Cria 2 tenants e 4 usuarios para testes locais:
+Cria tenants, usuarios e planos padrao:
 
-| Email | Senha | Permissoes | Tenant |
+| Email | Senha | Perfil | Tenant |
 |---|---|---|---|
-| `admin@saas.dev` | `admin123` | Todas | SaaS Core |
-| `rt@drogaria-rio.dev` | `rt123` | `CLIENTE_BUSCAR`, `CLIENTE_CADASTRAR`, `DSF_EMITIR`, `ANVISA_RELATORIOS` | Drogaria Rio |
-| `atendente@drogaria-rio.dev` | `atendente123` | `CLIENTE_BUSCAR`, `CLIENTE_CADASTRAR`, `DSF_EMITIR` | Drogaria Rio |
-| `gerente@drogaria-rio.dev` | `gerente123` | `CLIENTE_BUSCAR`, `CLIENTE_CADASTRAR`, `DSF_EMITIR`, `DSF_CANCELAR`, `DRIVE_CONFIGURAR` | Drogaria Rio |
+| `super@dsfsystem.com` | `Super@123` | Super Admin | SaaS Core |
+| `admin@drogariario.com` | `Admin@123` | Gestor + RT | Drogaria Rio |
+| `farmaceutico@drogariario.com` | `Farma@123` | RT | Drogaria Rio |
+| `atendente@drogariario.com` | `Atend@123` | Atendente | Drogaria Rio |
+
+Planos criados: Trial (14 dias), Mensal (R$99), Anual (R$990), Vitalicio.
 
 ```bash
-npx prisma db seed
+npx tsx prisma/seed.ts
 ```

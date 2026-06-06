@@ -1,8 +1,10 @@
-# Arquitetura — DSF System
+# Arquitetura — FarmaSign
 
 ## Visao Geral
 
 SaaS multi-tenant para drogarias emitirem, armazenarem e auditarem **Declaracoes de Servicos Farmaceuticos (DSF)** em conformidade com ANVISA RDC 44/2009 e LGPD (Lei 13.709/2018).
+
+URL de producao: `https://app.farmasign.com.br`
 
 ---
 
@@ -10,17 +12,19 @@ SaaS multi-tenant para drogarias emitirem, armazenarem e auditarem **Declaracoes
 
 | Camada | Tecnologia | Versao |
 |---|---|---|
-| Framework | Next.js App Router | 16.2.6 |
+| Framework | Next.js App Router | 16.2.6 (Turbopack) |
 | Linguagem | TypeScript (strict) | 5.x |
-| Runtime | React | 19.2.4 |
+| Runtime | React | 19.x |
 | ORM | Prisma | 7.8.0 |
-| Banco | Neon PostgreSQL (serverless) | — |
+| Banco | Neon PostgreSQL (serverless, sa-east-1) | — |
 | Adapter DB | `@prisma/adapter-neon` (HTTP) | 7.8.0 |
 | Autenticacao | NextAuth.js v4 + JWT | 4.24.x |
-| Geracao PDF | pdf-lib (server-side) | 1.17.x |
+| Pagamentos | Stripe SDK | 17.x |
 | Armazenamento | Google Drive API v3 (por tenant) | googleapis 172 |
-| Hospedagem | Vercel (Edge/Serverless) | — |
+| Criptografia | AES-256-GCM (Node.js crypto) | — |
+| Hospedagem | Vercel (Serverless + Edge) | — |
 | Estilizacao | Tailwind CSS | 4.x |
+| PWA | Service Worker manual | — |
 
 ---
 
@@ -29,15 +33,22 @@ SaaS multi-tenant para drogarias emitirem, armazenarem e auditarem **Declaracoes
 Banco unico com schema compartilhado. Isolamento logico por `tenantId` em **todas** as tabelas operacionais.
 
 ```
-Tenant
-  └── User (N)
-  └── Cliente (N)
-  └── DSF (N)
-  └── DriveCredential (1:1)
+Tenant (1)
+  ├── User (N)
+  ├── Cliente (N)
+  ├── DSF (N)
+  │     └── InsumoDSF (N)
+  ├── DriveCredential (0-1)
+  ├── Assinatura (0-1)
+  ├── ProcedimentoConfig (N)
   └── AuditLog (N)
+
+Plano (N) ──► Assinatura (N)
+GatewayConfig — configuracao global (sem tenant)
+PagamentoLog (N) ──► Assinatura
 ```
 
-Toda query de escrita/leitura passa pela verificacao `where: { tenantId: session.user.tenantId }` no nivel da API Route — nunca delegado ao frontend.
+Toda query de escrita/leitura passa pela verificacao `where: { tenantId: session.user.tenantId }` no nivel da API Route — nunca delegado ao frontend. Tenants "internos" (com usuario `SUPER_ADMIN_GLOBAIS`) sao filtrados automaticamente nas listagens administrativas.
 
 ---
 
@@ -51,13 +62,13 @@ Em vez de roles fixas, cada usuario tem um array de permissoes explicitamente co
 |---|---|
 | `CLIENTE_BUSCAR` | Buscar pacientes por CPF no balcao |
 | `CLIENTE_CADASTRAR` | Registrar novos pacientes |
-| `DSF_EMITIR` | Emitir DSF e gerar PDF |
+| `DSF_EMITIR` | Emitir DSF |
 | `DSF_CANCELAR` | Cancelar DSFs emitidas |
-| `ANVISA_RELATORIOS` | Acesso ao historico para fiscalizacao + assinar DSF como RT |
-| `DRIVE_CONFIGURAR` | Conectar/desconectar Google Drive do tenant |
-| `SUPER_ADMIN_GLOBAIS` | Gestao global de tenants e usuarios |
+| `ANVISA_RELATORIOS` | Historico para fiscalizacao + assinar DSF como RT |
+| `DRIVE_CONFIGURAR` | Conectar Google Drive e configurar procedimentos |
+| `SUPER_ADMIN_GLOBAIS` | Gestao global de tenants, planos, gateways |
 
-### Perfis Tipicos (combinacoes)
+### Perfis Tipicos
 
 | Perfil | Permissoes |
 |---|---|
@@ -66,131 +77,152 @@ Em vez de roles fixas, cada usuario tem um array de permissoes explicitamente co
 | Gerente / Admin | + `DSF_CANCELAR`, `DRIVE_CONFIGURAR` |
 | Super Admin SaaS | Todas |
 
-### Como Funciona no JWT
+### JWT — Re-fetch no banco a cada request
+
+O callback `jwt` no NextAuth re-busca nome, email, permissoes e CRF do banco em toda renovacao de token. Isso garante que alteracoes feitas pelo admin reflitam imediatamente sem logout.
 
 ```typescript
-// Armazenado no token JWT (NextAuth)
-token.permissions = user.permissions  // Permission[]
-token.tenantId    = user.tenantId
-token.crf         = user.crf          // farmaceutico
-
-// Acessivel em qualquer API Route
-const session = await getServerSession(authOptions)
-const perms = session.user.permissions as string[]
-if (!perms.includes('DSF_EMITIR')) return 403
+async jwt({ token, user }) {
+  if (user) { /* login: popula do objeto user */ }
+  else if (token.id) {
+    const dbUser = await prisma.user.findUnique({ where: { id: token.id } })
+    if (dbUser?.ativo) {
+      token.name = dbUser.nome
+      token.permissions = dbUser.permissions
+      // ...
+    }
+  }
+  return token
+}
 ```
+
+---
+
+## Sistema de Assinaturas
+
+Cada tenant tem uma `Assinatura` ligada a um `Plano`. O ciclo de vida e controlado por status e data de expiracao.
+
+```
+Plano (TRIAL / MENSAL / ANUAL / VITALICIO)
+  └── Assinatura por tenant
+        ├── Status: TRIAL → ATIVA → SUSPENSA / CANCELADA / EXPIRADA
+        ├── gatewayCustomerId  (Stripe customer_id)
+        ├── gatewaySubscriptionId (Stripe subscription_id)
+        └── PagamentoLog (historico de cobrancas)
+```
+
+### Controle de Acesso por Assinatura
+
+O layout do dashboard (`src/app/dashboard/layout.tsx`) verifica o status da assinatura a cada requisicao de pagina. Se `EXPIRADA` ou `CANCELADA`, redireciona para `/dashboard/assinatura-expirada`. Super Admin nao e afetado.
+
+### Cron de Expiracao
+
+`GET /api/cron/expirar-assinaturas` (diario as 04:00 UTC) marca como `EXPIRADA` toda assinatura TRIAL ou ATIVA com `expiraEm` no passado.
+
+---
+
+## Integracao Stripe
+
+```
+Super Admin configura chaves em /dashboard/gateways
+  → GatewayConfig.secretKeyEncrypted (AES-256-GCM)
+  → GatewayConfig.webhookSecretEncrypted (AES-256-GCM)
+
+POST /api/stripe/checkout
+  → Cria/reusa Stripe Customer para o tenant
+  → Cria Price no Stripe (salva ID no Plano para reuso)
+  → Retorna URL da Checkout Session
+
+POST /api/webhooks/stripe
+  → Verifica assinatura com stripe.webhooks.constructEvent()
+  → Atualiza status da Assinatura e registra PagamentoLog
+```
+
+Gateways suportados (estrutura extensivel): Stripe, Asaas, MercadoPago.
+
+---
+
+## Google Drive por Tenant
+
+```
+Admin autoriza OAuth → DriveCredential salvo (tokens AES-256-GCM)
+Cada DSF → upload automatico para pasta do tenant
+```
+
+**Seguranca dos tokens:**
+```
+Formato: base64( iv[12] | tag[16] | ciphertext )
+Algoritmo: AES-256-GCM
+Chave: DRIVE_TOKEN_ENCRYPTION_KEY (64 hex = 32 bytes)
+```
+
+A mesma funcao `encrypt/decrypt` de `src/lib/crypto.ts` e reutilizada para credenciais de gateways de pagamento.
+
+---
+
+## PWA
+
+Service worker manual em `public/sw.js` (compativel com Turbopack):
+- Network-first para paginas (sempre frescos)
+- Cache-first para assets estaticos
+- Registro via `src/components/pwa-register.tsx` (client component)
+- `public/manifest.json` com 8 tamanhos de icone (72px a 512px)
 
 ---
 
 ## Fluxo de Emissao de DSF
 
 ```
-Atendente busca CPF
-    │
-    ├─ Encontrado ──► ViewCard (confirmar dados)
-    │                     │
-    │                     ├─ Editar dados ──► PUT /api/clients/update
-    │                     │
-    │                     └─ Iniciar DSF ──► EmitCard
-    │                                            │
-    │                                            └─ POST /api/dsf/create
-    │                                                    │
-    │                                                    ├─ Gera PDF (pdf-lib, server-side)
-    │                                                    ├─ Upload Google Drive (se configurado)
-    │                                                    └─ Salva no banco (sempre)
-    │
-    └─ Nao encontrado ──► NotFoundCard
+Atendente busca CPF → GET /api/clients/search
                               │
-                              └─ Cadastrar ──► RegisterCard
-                                                    │
-                                                    └─ POST /api/clients/register
-                                                            │
-                                                            └─ Vai para ViewCard
+              ┌───────────────┴───────────┐
+              ▼                           ▼
+           viewing                    not_found
+              │                           │
+         Iniciar DSF              Cadastrar → POST /api/clients/register
+              │
+         POST /api/dsf/create
+              │ (status EMITIDA)
+         dsf_generated
+              │
+         [Imprimir / Digitalizar foto do cupom assinado]
+              │
+         POST /api/dsf/upload-signed
+              │ (foto → PDF → Drive)
+         status CONCLUIDA
 ```
 
-### Logica do Responsavel Tecnico (RT)
-
-O RT assina a DSF. A API resolve assim:
-
-1. Se o operador tem `ANVISA_RELATORIOS` → ele mesmo e o RT
-2. Se nao → busca o primeiro usuario ativo do tenant com `ANVISA_RELATORIOS`
-3. Se nao existe nenhum RT → retorna `422 Unprocessable Entity`
+Layout da impressao determinado por `Tenant.tipoImpressao`:
+- `BOBINA_80MM` — cupom termico 72mm
+- `FOLHA_A4` — relatorio clinico A4
 
 ---
 
-## Geracao de PDF (pdf-lib, server-side)
+## Proxy (Roteamento)
 
-O PDF e gerado **no servidor** (nao no browser) para garantir consistencia da assinatura e do layout.
-
-- Fonte: `StandardFonts.Helvetica` (WinAnsiEncoding — cobre todo o portugues)
-- Formato: A4, margem 48pt
-- Secoes: Cabecalho azul, dados da drogaria + RT, dados do paciente, tipo de servico, tabela de insumos (zebra), observacoes (word-wrap), assinatura RT, rodape legal ANVISA
-- Rodape legal: *"Este procedimento constitui monitoramento/triagem e NAO substitui o diagnostico medico. Conforme ANVISA RDC 44/2009."*
-
----
-
-## Google Drive por Tenant
-
-Cada tenant armazena os PDFs no seu proprio Google Drive, eliminando custos de storage centralizado e facilitando compliance.
-
-```
-Admin autoriza OAuth → DriveCredential salvo no banco (tokens criptografados AES-256-GCM)
-Cada DSF emitida → upload automatico para a pasta configurada
-```
-
-### Seguranca dos Tokens
-
-```
-Formato em disco: base64( iv[12] | tag[16] | ciphertext )
-Algoritmo: AES-256-GCM
-Chave: DRIVE_TOKEN_ENCRYPTION_KEY (64 hex chars = 32 bytes)
-```
-
-O token e renovado automaticamente (`refreshAccessToken`) antes de cada upload se estiver expirado.
-
----
-
-## Numeracao Sequencial de DSFs
-
-Formato: `DSF-{ANO}-{SEQUENCIAL:5 digitos}` por tenant.
-
-```typescript
-const count = await prisma.dSF.count({ where: { tenantId, createdAt: { gte: startOfYear } } })
-const numeroDsf = `DSF-2026-${String(count + 1).padStart(5, '0')}`
-// Ex: DSF-2026-00001
-```
-
-Protecao contra race condition: `@@unique([tenantId, numeroDsf])` no schema.
+`src/proxy.ts` (equivalente ao middleware do Next.js ≤15) verifica autenticacao para rotas `/dashboard/**`. O controle de assinatura (status) e feito no Server Component do layout — nao no proxy — para evitar acesso ao banco no Edge runtime.
 
 ---
 
 ## Auditoria (AuditLog)
 
-Todas as acoes criticas sao registradas com IP real (`x-forwarded-for`) e User-Agent.
-
-| Acao | Disparada por |
-|---|---|
-| `LOGIN` / `LOGOUT` | NextAuth callbacks |
-| `CLIENTE_CRIADO` | POST /api/clients/register |
-| `CLIENTE_ATUALIZADO` | PUT /api/clients/update |
-| `DSF_CRIADA` | POST /api/dsf/create |
-| `DSF_CONCLUIDA` | Quando driveFileId e salvo |
-| `DSF_CANCELADA` | POST /api/dsf/cancel (futuro) |
-| `DRIVE_AUTORIZADO` / `DRIVE_REVOGADO` | OAuth callback Drive (futuro) |
-| `CRON_CLEANUP_DSF` | Cron job automatico |
+Todas as acoes criticas sao registradas com IP real e User-Agent. Ver `DATABASE.md` para lista completa de `AuditAcao`.
 
 ---
 
-## Cron Job — Limpeza de DSFs
+## Restricao Critica — NeonHttp
 
-Rota: `GET /api/cron/cleanup-dsf`  
-Autenticacao: Header `Authorization: Bearer $CRON_SECRET`  
-Finalidade: Marca como `CANCELADA` DSFs que ficaram `EM_ANDAMENTO` por mais de 24h (falha silenciosa no upload do Drive).
+O adaptador `PrismaNeonHttp` nao suporta transacoes interativas.
 
-Configurado no `vercel.json`:
-```json
-{ "crons": [{ "path": "/api/cron/cleanup-dsf", "schedule": "0 3 * * *" }] }
-```
+**Nunca usar:**
+- `prisma.$transaction()`
+- `prisma.model.createMany()`
+- `prisma.model.updateMany()` dentro de transaction
+- `prisma.model.upsert()` — usa transacao internamente
+
+**Sempre usar:**
+- `Promise.all` de operacoes individuais para writes paralelos
+- `const existing = await findUnique(); existing ? update() : create()` para upsert manual
 
 ---
 
@@ -198,45 +230,69 @@ Configurado no `vercel.json`:
 
 ```
 src/
+  proxy.ts                  Verificacao de autenticacao (Edge)
   app/
     api/
-      auth/[...nextauth]/    NextAuth handler
-      clients/
-        search/              GET  — busca por CPF
-        register/            POST — cadastrar novo cliente
-        update/              PUT  — atualizar dados
-      dsf/
-        create/              POST — emitir DSF
+      auth/[...nextauth]/   NextAuth handler
+      clients/              Busca, cadastro e edicao de pacientes
+      dsf/                  Emissao, upload, listagem, cancelamento
+      admin/
+        planos/             CRUD de planos de assinatura
+        assinaturas/        Gestao de assinaturas por tenant
+        gateways/           Configuracao de gateways de pagamento
+        procedimentos/      Config de procedimentos por tenant
+        tenants/            CRUD de tenants
+        users/              CRUD de usuarios
+        dashboard/          Metricas SaaS (assinaturas, receita)
+        clients/            Listagem admin de clientes
+      stripe/
+        checkout/           Gera Stripe Checkout Session
+      webhooks/[gateway]/   Recebe notificacoes Stripe/Asaas/MercadoPago
+      procedimentos/        Procedimentos ativos do tenant (uso client)
+      integrations/
+        google-drive/       OAuth redirect, callback, status, disconnect
       cron/
-        cleanup-dsf/         GET  — job noturno
-    auth/
-      login/                 Pagina de login
+        cleanup-dsf/        Cancela DSFs EMITIDA > 24h
+        expirar-assinaturas/ Marca assinaturas expiradas
+    auth/login/             Pagina de login
     dashboard/
-      layout.tsx             Shell com sidebar (Server Component)
-      page.tsx               Home adaptativa (admin vs atendente)
-      clientes/              Balcao de atendimento (maquina de estados)
-      anvisa/                Historico e relatorios (futuro)
-      drive/                 Configuracao Google Drive (futuro)
-      admin/                 Painel administrativo (futuro)
+      layout.tsx            Shell + verificacao de assinatura (Server)
+      page.tsx              Home adaptativa
+      clientes/             Balcao de atendimento (maquina de estados)
+      anvisa/               Relatorio DSF — historico, filtros, CSV
+      pacientes/            Listagem admin de clientes
+      admin/
+        page.tsx            Gestao de usuarios (tenant admin)
+        procedimentos/      Configurar procedimentos habilitados + textos
+      tenants/              Painel Global SaaS
+      planos/               Gestao de planos de assinatura
+      gateways/             Configuracao de meios de pagamento
+      saas/                 Dashboard administrativo SaaS (metricas)
+      assinatura-expirada/  Tela de bloqueio por assinatura expirada
+      configuracoes/        Integracao Google Drive
   components/
-    dashboard-shell.tsx      Layout responsivo (drawer mobile / sidebar desktop)
-    nav-link.tsx             Link ativo com usePathname
-    logout-button.tsx        Botao de logout client-side
-    cpf-search.tsx           Widget de busca rapida (home)
+    dashboard-shell.tsx     Layout responsivo + badge de assinatura
+    pwa-register.tsx        Registro do service worker (client)
+    nav-link.tsx            Link ativo com usePathname
+    logout-button.tsx       Botao de logout client-side
   lib/
-    auth.ts                  Configuracao NextAuth (PBAC callbacks)
-    prisma.ts                Singleton PrismaClient (NeonHttp)
-    tipo-servico.ts          Labels dos TipoServico (client-safe, sem Prisma)
-    pdf-dsf.ts               Geracao de PDF A4 (server-only)
-    drive.ts                 Upload para Google Drive com refresh de token
-    crypto.ts                AES-256-GCM encrypt/decrypt
+    auth.ts                 NextAuth (PBAC + re-fetch do banco no JWT)
+    prisma.ts               Singleton PrismaClient (NeonHttp)
+    stripe.ts               Inicializa Stripe com chave do banco
+    tipo-servico.ts         Labels dos TipoServico (client-safe)
+    crypto.ts               AES-256-GCM encrypt/decrypt
+    drive.ts                Upload Drive com refresh de token
   types/
-    next-auth.d.ts           Augmentacao de tipos NextAuth
-  generated/
-    prisma/                  Cliente Prisma gerado (npx prisma generate)
+    next-auth.d.ts          Augmentacao de tipos NextAuth
+  generated/prisma/         Cliente Prisma gerado (npx prisma generate)
 prisma/
-  schema.prisma              Schema completo
-  seed.ts                    Seed de desenvolvimento (2 tenants, 4 usuarios)
-  migrations/                Historico de migrations SQL
-docs/                        Esta documentacao
+  schema.prisma             Schema completo
+  seed.ts                   Seed de desenvolvimento
+  migrations/               Historico SQL
+public/
+  manifest.json             PWA manifest
+  sw.js                     Service worker
+  icon-*.png                Icones PWA (72px–512px)
+docs/                       Esta documentacao
+vercel.json                 Crons, deploy config
 ```

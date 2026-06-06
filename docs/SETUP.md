@@ -1,20 +1,21 @@
-# Configuracao do Ambiente — DSF System
+# Configuracao do Ambiente — FarmaSign
 
 ## Prerequisitos
 
-| Ferramenta | Versao minima | Notas |
-|---|---|---|
-| Node.js | 20.x LTS | Runtime e toolchain |
-| npm | 10.x | Gerenciador de pacotes |
-| PostgreSQL | Neon serverless | Conta em neon.tech |
-| Google Cloud | — | Projeto OAuth para Drive |
+| Ferramenta | Versao minima |
+|---|---|
+| Node.js | 20.x LTS |
+| npm | 10.x |
+| PostgreSQL | Neon serverless (neon.tech) |
+| Google Cloud | Projeto OAuth para Drive |
+| Stripe | Conta em stripe.com (opcional) |
 
 ---
 
-## 1. Clonar e instalar dependencias
+## 1. Clonar e instalar
 
 ```bash
-git clone <repo>
+git clone https://github.com/synapseiqadm/dsf-system.git
 cd dsf-system
 npm install
 ```
@@ -23,39 +24,35 @@ npm install
 
 ## 2. Variaveis de ambiente
 
-O projeto usa `.env` na raiz (ignorado pelo git via `.gitignore`).
+Arquivo `.env` na raiz (ignorado pelo git).
 
-### Descricao de cada variavel
+### Descricao
 
 | Variavel | Descricao | Como gerar |
 |---|---|---|
-| `DATABASE_URL` | String de conexao Neon PostgreSQL (pooled) | Dashboard Neon → Connection string |
+| `DATABASE_URL` | String de conexao Neon (pooled) | Dashboard Neon → Connection string |
 | `NEXTAUTH_SECRET` | Segredo para assinatura JWT | `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"` |
-| `NEXTAUTH_URL` | URL base da aplicacao (sem barra final) | `http://localhost:3000` em dev; URL do Vercel em prod |
-| `GOOGLE_CLIENT_ID` | OAuth 2.0 client ID | Google Cloud Console → Credenciais → OAuth 2.0 |
-| `GOOGLE_CLIENT_SECRET` | OAuth 2.0 client secret | Mesmo local acima |
-| `DRIVE_TOKEN_ENCRYPTION_KEY` | Chave AES-256-GCM (64 chars hex = 32 bytes) | `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
-| `CRON_SECRET` | Token Bearer para o cron job | `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
+| `NEXTAUTH_URL` | URL base da aplicacao | `http://localhost:3000` em dev |
+| `GOOGLE_CLIENT_ID` | OAuth 2.0 client ID | Google Cloud Console → Credenciais |
+| `GOOGLE_CLIENT_SECRET` | OAuth 2.0 client secret | Idem |
+| `DRIVE_TOKEN_ENCRYPTION_KEY` | Chave AES-256-GCM (64 chars hex) | `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
+| `CRON_SECRET` | Token Bearer para cron jobs | Mesmo comando acima |
 
-> **DRIVE_TOKEN_ENCRYPTION_KEY**: nunca altere apos um tenant conectar o Drive — os tokens cifrados no banco ficam ilegíveis.
+> **DRIVE_TOKEN_ENCRYPTION_KEY**: a mesma chave e usada para criptografar credenciais do Google Drive e dos gateways de pagamento. **Nunca altere apos dados serem gravados no banco** — os registros criptografados ficarao ilegíveis.
 
-### Exemplo completo `.env`
+### Exemplo `.env`
 
 ```env
 DATABASE_URL="postgresql://user:password@ep-xxx.sa-east-1.aws.neon.tech/neondb?sslmode=require"
 
-# NextAuth
 NEXTAUTH_SECRET="base64-32bytes-aqui"
 NEXTAUTH_URL="http://localhost:3000"
 
-# Google OAuth2
 GOOGLE_CLIENT_ID="123456789-abc.apps.googleusercontent.com"
 GOOGLE_CLIENT_SECRET="GOCSPX-xxxxxxxx"
 
-# AES-256-GCM para cifrar tokens do Drive
 DRIVE_TOKEN_ENCRYPTION_KEY="64-hex-chars-aqui"
 
-# Cron jobs (Vercel)
 CRON_SECRET="64-hex-chars-aqui"
 ```
 
@@ -63,25 +60,18 @@ CRON_SECRET="64-hex-chars-aqui"
 
 ## 3. Banco de dados
 
-### Aplicar migrations (primeira vez ou apos pull)
-
 ```bash
+# Aplicar todas as migrations no banco
 npx prisma migrate deploy
-```
 
-### Gerar o cliente Prisma
-
-```bash
+# Gerar o cliente Prisma
 npx prisma generate
+
+# Criar dados de teste (desenvolvimento)
+npx tsx prisma/seed.ts
 ```
 
-> Sempre rodar `prisma generate` apos `migrate deploy` — o cliente gerado fica em `src/generated/prisma/` e NAO e commitado.
-
-### Criar uma nova migration (ao alterar schema)
-
-```bash
-npx prisma migrate dev --name descricao_da_mudanca
-```
+> Sempre rodar `prisma generate` apos `migrate deploy`. O cliente gerado fica em `src/generated/prisma/` e NAO e commitado.
 
 ---
 
@@ -91,7 +81,7 @@ npx prisma migrate dev --name descricao_da_mudanca
 npm run dev
 ```
 
-Acesse `http://localhost:3000`. A aplicacao redireciona `/` para `/auth/login`.
+Acesse `http://localhost:3000`. Redireciona automaticamente para `/auth/login`.
 
 ---
 
@@ -108,96 +98,88 @@ npm start
 
 ### No Google Cloud Console
 
-1. Acesse [console.cloud.google.com](https://console.cloud.google.com/) e crie ou selecione um projeto
-2. **APIs e Servicos → Biblioteca** → ative **Google Drive API**
-3. **APIs e Servicos → Credenciais → Criar Credencial → ID do cliente OAuth 2.0**
+1. **APIs e Servicos → Biblioteca** → ative **Google Drive API**
+2. **Credenciais → Criar → ID do cliente OAuth 2.0**
    - Tipo: **Aplicativo da Web**
-   - Nome: `DSF System`
-4. Adicione as URIs de redirecionamento autorizadas:
+3. Adicione URIs de redirecionamento autorizadas:
    - Dev: `http://localhost:3000/api/integrations/google-drive/callback`
-   - Prod: `https://seu-dominio.vercel.app/api/integrations/google-drive/callback`
-5. Copie Client ID e Client Secret para `.env`
+   - Prod: `https://app.farmasign.com.br/api/integrations/google-drive/callback`
+4. Copie Client ID e Secret para `.env`
 
-### Escopos solicitados
-
+### Escopos
 ```
 https://www.googleapis.com/auth/drive.file
 https://www.googleapis.com/auth/userinfo.email
 ```
 
-`drive.file` — acesso apenas a arquivos criados pela aplicacao.  
-`userinfo.email` — exibe o email da conta Google conectada no dashboard do tenant.
+---
 
-### Fluxo OAuth na aplicacao
+## 7. Configuracao Stripe (opcional)
 
-```
-/dashboard/configuracoes → botao "Conectar"
-    → GET /api/integrations/google-drive          (gera URL, redireciona)
-    → Google (consentimento do usuario)
-    → GET /api/integrations/google-drive/callback  (troca code por tokens)
-    → cria pasta no Drive do tenant
-    → salva DriveCredential cifrada no banco
-    → redirect /dashboard/configuracoes?drive=conectado
-```
+As chaves Stripe sao armazenadas criptografadas no banco — **nao precisam de variavel de ambiente**.
+
+### Passos apos o deploy
+
+1. Acesse `https://app.farmasign.com.br/dashboard/gateways` como Super Admin
+2. Clique em **Configurar** na linha Stripe
+3. Insira:
+   - **Secret Key**: `sk_test_...` (teste) ou `sk_live_...` (producao)
+   - **Publishable Key**: `pk_test_...` ou `pk_live_...`
+   - **Webhook Secret**: `whsec_...` (do Stripe Dashboard → Webhooks)
+4. Marque como **Ativo** e salve
+
+### Configurar webhook no Stripe Dashboard
+
+URL para registrar: `https://app.farmasign.com.br/api/webhooks/stripe`
+
+Eventos a escutar:
+- `checkout.session.completed`
+- `invoice.payment_succeeded`
+- `invoice.payment_failed`
+- `customer.subscription.deleted`
+- `charge.refunded`
 
 ---
 
-## 7. Deploy no Vercel
+## 8. Deploy no Vercel
 
 ### Variaveis de ambiente
 
-Configure todas as variaveis do `.env` no painel Vercel:
-**Settings → Environment Variables**
+Configure no painel Vercel: **Settings → Environment Variables**
 
-`NEXTAUTH_URL` deve ser a URL de producao sem barra final (ex: `https://dsf-system.vercel.app`).
+| Variavel | Observacao |
+|---|---|
+| `DATABASE_URL` | |
+| `NEXTAUTH_SECRET` | |
+| `NEXTAUTH_URL` | URL de producao sem barra final |
+| `GOOGLE_CLIENT_ID` | |
+| `GOOGLE_CLIENT_SECRET` | |
+| `DRIVE_TOKEN_ENCRYPTION_KEY` | Mesma chave usada no banco |
+| `CRON_SECRET` | |
 
-### Cron job automatico
+> **Stripe**: chaves ficam no banco (criptografadas), nao em variaveis de ambiente.
 
-`vercel.json` configura o cron de limpeza de DSFs abandonadas:
+### Cron jobs (`vercel.json`)
 
 ```json
-{ "crons": [{ "path": "/api/cron/cleanup-dsf", "schedule": "0 3 * * *" }] }
+{
+  "crons": [
+    { "path": "/api/cron/cleanup-dsf",          "schedule": "0 3 * * *" },
+    { "path": "/api/cron/expirar-assinaturas",   "schedule": "0 4 * * *" }
+  ]
+}
 ```
 
-O Vercel chama esse endpoint diariamente as 03:00 UTC com o header `Authorization: Bearer {CRON_SECRET}`.
+O Vercel chama esses endpoints diariamente com `Authorization: Bearer {CRON_SECRET}`.
 
-### Comandos pos-deploy (primeira vez)
+### Deploy automatico
 
-```bash
-npx prisma migrate deploy   # aplica migrations no banco de producao
+O GitHub Actions (`.github/workflows/deploy.yml`) faz deploy a cada push para `master`:
+```yaml
+vercel --prod --token=${{ secrets.VERCEL_TOKEN }} --yes
 ```
 
----
-
-## 8. Estrutura de diretorios chave
-
-```
-.env                        Variaveis de ambiente (nao commitado)
-prisma/
-  schema.prisma             Schema do banco
-  migrations/               Historico de migrations SQL
-src/
-  generated/prisma/         Cliente Prisma gerado (nao commitado)
-  lib/                      Utilitarios server-side (auth, prisma, pdf, drive, crypto)
-  app/
-    api/
-      auth/                 NextAuth
-      clients/              Busca, cadastro e edicao de pacientes
-      dsf/                  Emissao (create) e digitalizacao (upload-signed)
-      integrations/
-        google-drive/       OAuth redirect, callback, status, disconnect
-      cron/                 Limpeza automatica de DSFs abandonadas
-    auth/                   Paginas publicas (login)
-    dashboard/
-      clientes/             Emissao DSF (balcao — fluxo completo)
-      anvisa/               Relatorio DSF — historico paginado, filtros, CSV, cancelamento
-      pacientes/            Listagem admin de clientes com historico de DSFs
-      admin/                Gestao de usuarios (tenant admin e super admin)
-      tenants/              Painel Global SaaS — gestao de tenants
-      configuracoes/        Integracao Google Drive
-  components/               Componentes reutilizaveis
-docs/                       Esta documentacao
-```
+O Vercel nao faz deploy automatico pelo GitHub — desabilitado via `"github": { "enabled": false }` no `vercel.json` para evitar builds duplicados.
 
 ---
 
@@ -205,11 +187,12 @@ docs/                       Esta documentacao
 
 - [ ] `DATABASE_URL` aponta para banco Neon com SSL
 - [ ] `NEXTAUTH_SECRET` gerado (base64, 32 bytes)
-- [ ] `NEXTAUTH_URL` com URL de producao sem barra final
+- [ ] `NEXTAUTH_URL` = URL de producao sem barra final
 - [ ] `GOOGLE_CLIENT_ID` e `GOOGLE_CLIENT_SECRET` configurados
-- [ ] URI de redirecionamento do Google inclui URL de producao
-- [ ] `DRIVE_TOKEN_ENCRYPTION_KEY` com 64 caracteres hex
+- [ ] URI de redirecionamento Google inclui URL de producao
+- [ ] `DRIVE_TOKEN_ENCRYPTION_KEY` = 64 chars hex
 - [ ] `CRON_SECRET` configurado
-- [ ] `npx prisma migrate deploy` executado no banco de producao
-- [ ] `npx prisma generate` executado apos migrate
-- [ ] Login funcional
+- [ ] `npx prisma migrate deploy` executado no banco
+- [ ] `npx tsx prisma/seed.ts` executado (cria planos e usuarios iniciais)
+- [ ] Login funcional em `/auth/login`
+- [ ] Stripe configurado em `/dashboard/gateways` (opcional)
