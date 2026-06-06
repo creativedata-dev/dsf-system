@@ -16,10 +16,13 @@ function CheckoutButton({ tenantId, planoId }: { tenantId: string; planoId: stri
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tenantId, planoId, cadencia }),
       })
-      const json = await res.json()
-      if (!res.ok) { setError(json.error ?? 'Erro ao gerar link'); return }
-      window.open(json.url, '_blank')
-    } catch { setError('Falha ao gerar link de pagamento') }
+      const text = await res.text()
+      let json: Record<string, unknown> = {}
+      try { json = JSON.parse(text) } catch { /* non-JSON */ }
+      if (!res.ok) { setError(json.error as string ?? `Erro ${res.status}: ${text.slice(0, 200)}`); return }
+      if (!json.url) { setError('URL de pagamento não retornada'); return }
+      window.open(json.url as string, '_blank')
+    } catch (e) { setError(`Erro: ${e instanceof Error ? e.message : String(e)}`) }
     finally { setLoading(false) }
   }
 
