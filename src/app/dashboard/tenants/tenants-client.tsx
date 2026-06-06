@@ -285,12 +285,14 @@ export function TenantsClient() {
         ? { status: assinaturaForm.status, planoId: assinaturaForm.planoId, expiraEm: assinaturaForm.expiraEm || null, gateway: assinaturaForm.gateway || null, gatewayCustomerId: assinaturaForm.gatewayCustomerId || null, gatewaySubscriptionId: assinaturaForm.gatewaySubscriptionId || null, obs: assinaturaForm.obs || null }
         : { tenantId: detailTenant.id, ...assinaturaForm, expiraEm: assinaturaForm.expiraEm || null, gateway: assinaturaForm.gateway || null, gatewayCustomerId: assinaturaForm.gatewayCustomerId || null, gatewaySubscriptionId: assinaturaForm.gatewaySubscriptionId || null, obs: assinaturaForm.obs || null }
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-      const json = await res.json()
-      if (!res.ok) { setAssinaturaError(json.error ?? 'Erro ao salvar'); return }
-      setAssinatura(json.assinatura)
+      const text = await res.text()
+      let json: Record<string, unknown> = {}
+      try { json = JSON.parse(text) } catch { /* resposta não-JSON */ }
+      if (!res.ok) { setAssinaturaError(json.error as string ?? `Erro ${res.status}: ${text.slice(0, 120)}`); return }
+      setAssinatura(json.assinatura as AssinaturaItem)
       setAssinaturaSaved(true)
       setTimeout(() => setAssinaturaSaved(false), 3000)
-    } catch { setAssinaturaError('Falha de conexão') }
+    } catch (e) { setAssinaturaError(`Falha: ${e instanceof Error ? e.message : String(e)}`) }
     finally { setAssinaturaSaving(false) }
   }
 
