@@ -61,6 +61,11 @@ interface TenantItem {
   ativo: boolean
   createdAt: string
   _count: { users: number; dsfs: number }
+  assinatura: {
+    status: string
+    expiraEm: string | null
+    plano: { nome: string; tipo: string }
+  } | null
 }
 
 interface PlanoItem {
@@ -485,6 +490,7 @@ export function TenantsClient() {
                     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Impressão</th>
                     <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Usuários</th>
                     <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">DSFs</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Plano</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
                     <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Ações</th>
                   </tr>
@@ -510,6 +516,31 @@ export function TenantsClient() {
                       </td>
                       <td className="px-4 py-3 text-center text-slate-600">{t._count.users}</td>
                       <td className="px-4 py-3 text-center text-slate-600">{t._count.dsfs}</td>
+                      <td className="px-4 py-3">
+                        {t.assinatura ? (
+                          <div>
+                            <span className={`inline-flex px-2 py-0.5 rounded text-[10px] font-medium ${
+                              t.assinatura.plano.tipo === 'VITALICIO' ? 'bg-green-100 text-green-700' :
+                              t.assinatura.plano.tipo === 'ANUAL' ? 'bg-purple-100 text-purple-700' :
+                              t.assinatura.plano.tipo === 'MENSAL' ? 'bg-blue-100 text-blue-700' :
+                              'bg-amber-100 text-amber-700'
+                            }`}>
+                              {t.assinatura.plano.nome}
+                            </span>
+                            <p className={`text-[10px] mt-0.5 ${
+                              t.assinatura.status === 'ATIVA' ? 'text-green-600' :
+                              t.assinatura.status === 'TRIAL' ? 'text-amber-600' :
+                              'text-red-500'
+                            }`}>
+                              {t.assinatura.status}
+                              {t.assinatura.expiraEm && t.assinatura.status === 'TRIAL' &&
+                                ` até ${new Date(t.assinatura.expiraEm).toLocaleDateString('pt-BR')}`}
+                            </p>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-slate-400">—</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${t.ativo ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
                           {t.ativo ? 'Ativo' : 'Inativo'}

@@ -31,6 +31,13 @@ export async function GET() {
       ativo: true,
       createdAt: true,
       _count: { select: { users: true, dsfs: true } },
+      assinatura: {
+        select: {
+          status: true,
+          expiraEm: true,
+          plano: { select: { nome: true, tipo: true } },
+        },
+      },
     },
     orderBy: { nomeFantasia: 'asc' },
   })
