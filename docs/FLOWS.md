@@ -162,7 +162,8 @@ Formulario: plano, status, data de expiracao, gateway, IDs
 ### Gerar link de pagamento Stripe
 
 ```
-aba Assinatura → [💳 Mensal / 📅 Anual / ♾️ Vitalicio]
+aba Assinatura → seleciona plano → [Gerar link de pagamento (Stripe)]
+                                         (cadencia derivada do Plano.tipo)
 
 POST /api/stripe/checkout { tenantId, planoId, cadencia }
                                   │
@@ -175,8 +176,16 @@ POST /api/stripe/checkout { tenantId, planoId, cadencia }
                      POST /api/webhooks/stripe (evento checkout.session.completed)
                                   │
                      Assinatura.status = ATIVA
+                     Assinatura.planoId atualizado (do metadata)
                      PagamentoLog APROVADO
                      AuditLog ASSINATURA_ATUALIZADA + PAGAMENTO_REGISTRADO
+
+POST /api/webhooks/stripe (evento invoice.payment_succeeded)
+                                  │
+                     Assinatura.status = ATIVA
+                     Assinatura.expiraEm atualizado (period_end da fatura)
+                     Assinatura.planoId atualizado (subscription_details.metadata)
+                     PagamentoLog APROVADO
 ```
 
 ### Expiracao automatica
@@ -326,6 +335,7 @@ O adaptador `PrismaNeonHttp` nao suporta transacoes interativas.
 - `prisma.model.createMany()`
 - `prisma.model.updateMany()` dentro de transaction
 - `prisma.model.upsert()` — usa transacao internamente
+- `prisma.model.update({ data, include })` — update com include tambem dispara transacao
 
 **Sempre usar:**
 - `Promise.all(items.map(item => prisma.model.create({ data: item })))` para creates multiplos

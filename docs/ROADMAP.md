@@ -1,7 +1,7 @@
 # Roadmap de Produto — FarmaSign
 
 Baseado no Plano de Expansao RDC 44/2009.  
-Ultima atualizacao: junho/2026.
+Ultima atualizacao: 06/06/2026.
 
 ---
 

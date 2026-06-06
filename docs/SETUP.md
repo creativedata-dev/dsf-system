@@ -15,7 +15,7 @@
 ## 1. Clonar e instalar
 
 ```bash
-git clone https://github.com/synapseiqadm/dsf-system.git
+git clone https://github.com/creativedata-dev/dsf-system.git
 cd dsf-system
 npm install
 ```
@@ -179,7 +179,50 @@ O GitHub Actions (`.github/workflows/deploy.yml`) faz deploy a cada push para `m
 vercel --prod --token=${{ secrets.VERCEL_TOKEN }} --yes
 ```
 
+> **Atencao:** O secret `VERCEL_TOKEN` no GitHub deve ser gerado na conta `creative-data-projects` (conta que detem o projeto em producao). Token de outra conta causa falha silenciosa no CI.
+
 O Vercel nao faz deploy automatico pelo GitHub — desabilitado via `"github": { "enabled": false }` no `vercel.json` para evitar builds duplicados.
+
+### Deploy manual (alternativa ao CI)
+
+```bash
+npx vercel --prod --scope creative-data-projects
+```
+
+---
+
+## 9. Estrategia de Branches
+
+| Branch | Finalidade | Deploy |
+|---|---|---|
+| `master` | Producao — `app.farmasign.com.br` | Automatico via GitHub Actions |
+| `dev` | Desenvolvimento e novas features | Preview Vercel (URL temporaria) |
+
+**Regras:**
+- Todo trabalho novo comeca em `dev`
+- Hotfixes urgentes podem ir direto em `master`, depois `git merge master` em `dev`
+- `dev` → `master` via cherry-pick ou PR revisado
+- `master` → `dev` via `git merge master` (para trazer hotfixes)
+
+```bash
+# Trazer correcoes de master para dev
+git checkout dev
+git merge master
+git push origin dev
+
+# Deploy de preview em dev
+npx vercel --scope creative-data-projects  # sem --prod
+
+# Deploy de producao (master)
+npx vercel --prod --scope creative-data-projects
+```
+
+### Repositorio
+
+- **GitHub:** `https://github.com/creativedata-dev/dsf-system`
+- **Conta Vercel prod:** `creative-data-projects`
+- **Branch prod:** `master`
+- **Branch dev:** `dev`
 
 ---
 

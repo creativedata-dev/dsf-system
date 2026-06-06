@@ -216,11 +216,16 @@ Recebe notificacoes de pagamento. Gateways suportados: `stripe`, `asaas`.
 **Eventos Stripe tratados:**
 | Evento | Acao |
 |---|---|
-| `checkout.session.completed` | Assinatura → ATIVA, registra pagamento APROVADO |
-| `invoice.payment_succeeded` | Assinatura → ATIVA, registra pagamento APROVADO |
+| `checkout.session.completed` | Assinatura → ATIVA, atualiza `planoId` do metadata, registra pagamento APROVADO |
+| `invoice.payment_succeeded` | Assinatura → ATIVA, atualiza `planoId` (subscription_details.metadata) e `expiraEm` (period_end da fatura), registra pagamento APROVADO |
 | `invoice.payment_failed` | Assinatura → SUSPENSA, registra pagamento RECUSADO |
 | `customer.subscription.deleted` | Assinatura → CANCELADA |
 | `charge.refunded` | Registra pagamento REEMBOLSADO |
+
+**Lookup da assinatura (ordem de prioridade):**
+1. `metadata.tenantId` (disponivel no checkout.session.completed)
+2. `gatewaySubscriptionId`
+3. `gatewayCustomerId`
 
 ---
 

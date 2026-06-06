@@ -219,10 +219,21 @@ O adaptador `PrismaNeonHttp` nao suporta transacoes interativas.
 - `prisma.model.createMany()`
 - `prisma.model.updateMany()` dentro de transaction
 - `prisma.model.upsert()` — usa transacao internamente
+- `prisma.model.update({ data, include: {...} })` — update com include tambem dispara transacao interativa
 
 **Sempre usar:**
 - `Promise.all` de operacoes individuais para writes paralelos
 - `const existing = await findUnique(); existing ? update() : create()` para upsert manual
+- Para update com retorno enriquecido: `await update(...)` separado de `await findUnique({ include })`
+
+```typescript
+// Correto — duas queries separadas
+await prisma.model.update({ where: { id }, data })
+const result = await prisma.model.findUnique({ where: { id }, include: { rel: true } })
+
+// ERRADO — causa erro no NeonHttp
+const result = await prisma.model.update({ where: { id }, data, include: { rel: true } })
+```
 
 ---
 
