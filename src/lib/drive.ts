@@ -56,3 +56,68 @@ export async function uploadPdfToDrive(
 
   return response.data.id ?? null
 }
+
+export async function uploadImageToDrive(
+  tenantId: string,
+  fileName: string,
+  imageBytes: Uint8Array,
+  mimeType: string,
+): Promise<{ fileId: string; webViewLink: string } | null> {
+  const cred = await prisma.driveCredential.findUnique({ where: { tenantId } })
+  if (!cred) return null
+
+  const oauth2 = new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+  )
+
+  oauth2.setCredentials({
+    access_token: decrypt(cred.accessToken),
+    refresh_token: decrypt(cred.refreshToken),
+  })
+
+  if (new Date() >= cred.tokenExpiry) {
+    try {
+      const { credentials } = await oauth2.refreshAccessToken()
+      oauth2.setCredentials(credentials)
+      await prisma.driveCredential.update({
+        where: { tenantId },
+        data: {
+          accessToken: encrypt(credentials.access_token!),
+          tokenExpiry: new Date(credentials.expiry_date!),
+        },
+      })
+    } catch {
+      return null
+    }
+  }
+
+  const drive = google.drive({ version: 'v3', auth: oauth2 })
+
+  const stream = new Readable()
+  stream.push(Buffer.from(imageBytes))
+  stream.push(null)
+
+  const response = await drive.files.create({
+    requestBody: {
+      name: fileName,
+      mimeType,
+      parents: [cred.driveFolderId],
+    },
+    media: { mimeType, body: stream },
+    fields: 'id,webViewLink',
+  })
+
+  if (!response.data.id) return null
+
+  // Tornar o arquivo legível por qualquer um com o link
+  await drive.permissions.create({
+    fileId: response.data.id,
+    requestBody: { role: 'reader', type: 'anyone' },
+  })
+
+  return {
+    fileId: response.data.id,
+    webViewLink: response.data.webViewLink ?? `https://drive.google.com/file/d/${response.data.id}/view`,
+  }
+}

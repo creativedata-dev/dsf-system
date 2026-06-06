@@ -15,6 +15,7 @@ interface Registro {
   umidadePercent: number | null
   alertaDisparado: boolean
   observacao: string | null
+  fotoUrl: string | null
   nomeUsuario: string
   ambiente: {
     nome: string
@@ -149,6 +150,7 @@ export default function HistoricoPage() {
                 <th className="text-right px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wide">Umid (%)</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wide">Responsável</th>
                 <th className="text-center px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wide">Status</th>
+                <th className="text-center px-4 py-3 text-xs font-semibold text-slate-600 uppercase tracking-wide">Foto</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -179,6 +181,23 @@ export default function HistoricoPage() {
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-100 text-emerald-700 text-xs font-medium rounded-full">
                           ✓ OK
                         </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      {r.fotoUrl ? (
+                        <a
+                          href={r.fotoUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-600 transition"
+                          title="Ver foto no Drive"
+                        >
+                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+                          </svg>
+                        </a>
+                      ) : (
+                        <span className="text-slate-300 text-xs">—</span>
                       )}
                     </td>
                   </tr>

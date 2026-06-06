@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) {
     include: {
       ambiente: { select: { nome: true, tipo: true, tempMin: true, tempMax: true, umidadeMin: true, umidadeMax: true } },
     },
+    // fotoUrl and fotoFileId are included automatically (no select restriction)
     orderBy: [{ dataLeitura: 'desc' }, { periodo: 'asc' }],
     take: 500,
   })

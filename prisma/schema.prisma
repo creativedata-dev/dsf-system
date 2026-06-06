@@ -364,6 +364,9 @@ model RegistroTermoHigrometria {
   observacao       String?
   createdAt        DateTime @default(now())
 
+  fotoFileId String?
+  fotoUrl    String?
+
   ambiente Ambiente @relation(fields: [ambienteId], references: [id])
 
   @@unique([ambienteId, dataLeitura, periodo])
