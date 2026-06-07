@@ -19,6 +19,7 @@ enum Permission {
   TEMPERATURA_GERENCIAR
   EQUIPAMENTOS_GERENCIAR
   POPS_GERENCIAR
+  VALIDADE_GERENCIAR
   SUPER_ADMIN_GLOBAIS
 }
 
@@ -81,6 +82,11 @@ enum AuditAcao {
   POP_REPROVADO
   POP_CRIADO
   POP_ATUALIZADO
+  LOTE_CRIADO
+  LOTE_ATUALIZADO
+  LOTE_QUARENTENA
+  LOTE_DESCARTADO
+  CRON_ALERTAS_VALIDADE
 }
 
 enum TipoPlano {
@@ -134,6 +140,9 @@ model Tenant {
   equipamentos         Equipamento[]
   documentosPOP        DocumentoPOP[]
   assinaturasPOP       AssinaturaPOP[]
+  produtosCatalogo     ProdutoCatalogo[]
+  lotesProduto         LoteProduto[]
+  autoDescartes        AutoDescarte[]
 }
 
 model User {
@@ -466,5 +475,66 @@ model AssinaturaPOP {
   tenant    Tenant       @relation(fields: [tenantId], references: [id])
 
   @@index([documentoId, usuarioId])
+  @@index([tenantId])
+}
+
+// ─── Módulo 3.1 — Controle de Validade e Quarentena ─────────────────────────
+
+model ProdutoCatalogo {
+  id            String   @id @default(uuid())
+  tenantId      String
+  nome          String
+  fabricante    String?
+  unidadePadrao String   @default("un")
+  ativo         Boolean  @default(true)
+  createdAt     DateTime @default(now())
+
+  lotes  LoteProduto[]
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, nome])
+  @@index([tenantId])
+}
+
+model LoteProduto {
+  id                 String   @id @default(uuid())
+  tenantId           String
+  produtoCatalogoId  String
+  fabricante         String
+  lote               String
+  validade           DateTime @db.Date
+  quantidade         Decimal  @db.Decimal(10, 3)
+  unidade            String   @default("un") // "un"|"cx"|"mL"|"g"|"mg"|"L"|"kg"
+  status             String   @default("ATIVO") // "ATIVO"|"QUARENTENA"|"DESCARTADO"
+  localizacao        String?
+  obs                String?
+  ativo              Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  tenant   Tenant          @relation(fields: [tenantId], references: [id])
+  produto  ProdutoCatalogo @relation(fields: [produtoCatalogoId], references: [id])
+  descarte AutoDescarte?
+
+  @@index([tenantId])
+  @@index([validade])
+  @@index([tenantId, status])
+}
+
+model AutoDescarte {
+  id           String   @id @default(uuid())
+  loteId       String   @unique
+  tenantId     String
+  usuarioId    String
+  numeroAuto   String
+  motivo       String
+  dataDescarte DateTime @db.Date
+  responsavel  String
+  obs          String?
+  createdAt    DateTime @default(now())
+
+  lote   LoteProduto @relation(fields: [loteId], references: [id])
+  tenant Tenant      @relation(fields: [tenantId], references: [id])
+
   @@index([tenantId])
 }

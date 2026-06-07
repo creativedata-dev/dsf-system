@@ -31,6 +31,12 @@ export const MODULOS_DISPONIVEIS: ModuloDefinition[] = [
     icone: '📋',
   },
   {
+    slug: 'VALIDADE',
+    label: 'Controle de Validade',
+    descricao: 'Gestão de lotes por validade, quarentena e descarte com auto de inutilização',
+    icone: '📅',
+  },
+  {
     slug: 'PAINEL_FISCAL',
     label: 'Painel do Fiscal',
     descricao: 'Exportação de pacote de conformidade em PDF único para vistorias da Vigilância Sanitária',

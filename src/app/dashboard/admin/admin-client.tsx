@@ -27,6 +27,7 @@ const ALL_PERMISSIONS: { value: string; label: string }[] = [
   { value: 'TEMPERATURA_GERENCIAR',  label: 'Gerenciar Temperatura' },
   { value: 'EQUIPAMENTOS_GERENCIAR', label: 'Gerenciar Equipamentos' },
   { value: 'POPS_GERENCIAR',         label: 'Gerenciar POPs' },
+  { value: 'VALIDADE_GERENCIAR',     label: 'Controle de Validade' },
   { value: 'SUPER_ADMIN_GLOBAIS',    label: 'Super Admin' },
 ]
 
@@ -41,6 +42,7 @@ const PERM_COLORS: Record<string, string> = {
   TEMPERATURA_GERENCIAR: 'bg-cyan-100 text-cyan-700',
   EQUIPAMENTOS_GERENCIAR:'bg-teal-100 text-teal-700',
   POPS_GERENCIAR:       'bg-violet-100 text-violet-700',
+  VALIDADE_GERENCIAR:   'bg-rose-100 text-rose-700',
 }
 
 const PERM_LABEL: Record<string, string> = Object.fromEntries(
