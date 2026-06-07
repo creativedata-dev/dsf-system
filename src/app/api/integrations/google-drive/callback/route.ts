@@ -65,25 +65,19 @@ export async function GET(request: NextRequest) {
     const driveFolderId = folder.data.id!
     const tokenExpiry = new Date(tokens.expiry_date ?? Date.now() + 3_600_000)
 
-    // upsert: funciona como INSERT … ON CONFLICT — compatível com NeonHttp
-    await prisma.driveCredential.upsert({
-      where: { tenantId },
-      create: {
-        tenantId,
-        accessToken: encrypt(tokens.access_token),
-        refreshToken: encrypt(tokens.refresh_token),
-        tokenExpiry,
-        driveFolderId,
-        driveEmail,
-      },
-      update: {
-        accessToken: encrypt(tokens.access_token),
-        refreshToken: encrypt(tokens.refresh_token),
-        tokenExpiry,
-        driveFolderId,
-        driveEmail,
-      },
-    })
+    const credData = {
+      accessToken: encrypt(tokens.access_token),
+      refreshToken: encrypt(tokens.refresh_token),
+      tokenExpiry,
+      driveFolderId,
+      driveEmail,
+    }
+    const existing = await prisma.driveCredential.findUnique({ where: { tenantId } })
+    if (existing) {
+      await prisma.driveCredential.update({ where: { tenantId }, data: credData })
+    } else {
+      await prisma.driveCredential.create({ data: { tenantId, ...credData } })
+    }
 
     const ip =
       request.headers.get('x-forwarded-for')?.split(',')[0].trim() ??
