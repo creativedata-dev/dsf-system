@@ -18,6 +18,7 @@ enum Permission {
   DRIVE_CONFIGURAR
   TEMPERATURA_GERENCIAR
   EQUIPAMENTOS_GERENCIAR
+  POPS_GERENCIAR
   SUPER_ADMIN_GLOBAIS
 }
 
@@ -76,6 +77,10 @@ enum AuditAcao {
   EQUIPAMENTO_CRIADO
   EQUIPAMENTO_ATUALIZADO
   CRON_ALERTAS_EQUIPAMENTOS
+  POP_CONCLUIDO
+  POP_REPROVADO
+  POP_CRIADO
+  POP_ATUALIZADO
 }
 
 enum TipoPlano {
@@ -127,6 +132,8 @@ model Tenant {
   assinatura           Assinatura?
   ambientes            Ambiente[]
   equipamentos         Equipamento[]
+  documentosPOP        DocumentoPOP[]
+  assinaturasPOP       AssinaturaPOP[]
 }
 
 model User {
@@ -402,4 +409,62 @@ model RegistroTermoHigrometria {
 
   @@unique([ambienteId, dataLeitura, periodo])
   @@index([tenantId, dataLeitura(sort: Desc)])
+}
+
+// ─── Módulo 2.1 — POPs e E-learning ─────────────────────────────────────────
+
+model DocumentoPOP {
+  id         String   @id @default(uuid())
+  tenantId   String?  // null = conteúdo padrão FarmaSign (global)
+  codigo     String   // "POP-01"
+  titulo     String
+  baseLegal  String?
+  objetivo   String?
+  conteudo   String   // texto com seções separadas por "### Título\n\n"
+  versao     String   @default("1.0")
+  minAcertos Int      @default(2)
+  vigente    Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant      Tenant?        @relation(fields: [tenantId], references: [id])
+  questoes    QuestaoQuiz[]
+  assinaturas AssinaturaPOP[]
+
+  @@index([tenantId])
+  @@index([codigo])
+}
+
+model QuestaoQuiz {
+  id              String  @id @default(uuid())
+  documentoId     String
+  ordem           Int
+  enunciado       String
+  opcoes          Json    // [{letra:"a",texto:"..."},{...}]
+  respostaCorreta String  // "a" | "b" | "c" | "d"
+  justificativa   String?
+
+  documento DocumentoPOP @relation(fields: [documentoId], references: [id])
+
+  @@index([documentoId])
+}
+
+model AssinaturaPOP {
+  id            String   @id @default(uuid())
+  documentoId   String
+  tenantId      String
+  usuarioId     String
+  acertos       Int
+  totalQuestoes Int
+  aprovado      Boolean
+  respostas     Json     // {questaoId: "a"}
+  ipOrigem      String
+  userAgent     String
+  createdAt     DateTime @default(now())
+
+  documento DocumentoPOP @relation(fields: [documentoId], references: [id])
+  tenant    Tenant       @relation(fields: [tenantId], references: [id])
+
+  @@index([documentoId, usuarioId])
+  @@index([tenantId])
 }
