@@ -26,7 +26,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   // Bloqueia acesso se assinatura expirada ou cancelada
   if (!isSuperAdmin && (assinatura?.status === 'EXPIRADA' || assinatura?.status === 'CANCELADA')) {
-    redirect('/dashboard/assinatura-expirada')
+    redirect('/assinatura-expirada')
   }
 
   return (
