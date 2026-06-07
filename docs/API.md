@@ -266,6 +266,12 @@ Recalcula status de todos os equipamentos ativos (exceto MANUTENCAO) com base em
 Atualiza para `ATIVO`, `VENCENDO` (≤30 dias) ou `VENCIDO`.
 **Schedule:** 08:00 UTC diario
 
+### `GET /api/cron/alertas-validade`
+Verifica todos os lotes ATIVO com validade ate 90 dias (inclui vencidos).
+Registra `AuditLog` por tenant com contagem de lotes por horizonte (vencidos / 30d / 90d).
+**Auth:** `Authorization: Bearer {CRON_SECRET}`
+**Schedule:** 08:00 UTC diario
+
 ---
 
 ## Temperatura e Umidade
@@ -334,3 +340,66 @@ Upload do certificado de calibracao (PDF) para o Google Drive.
 Upload da foto do equipamento/lacre de calibracao para o Google Drive.
 **Permissao:** `EQUIPAMENTOS_GERENCIAR`
 **Body:** `multipart/form-data` — `foto` (JPEG/PNG/WebP/HEIC, max 10 MB)
+
+---
+
+## POPs e E-learning
+
+### `GET /api/pops`
+Lista POPs disponiveis para o tenant: conteudo global (tenantId=null) mesclado com conteudo proprio do tenant (proprio sobrepoe global de mesmo codigo).
+**Permissao:** qualquer usuario autenticado (modulo POPS habilitado)
+**Retorna:** `[{ id, codigo, titulo, versao, baseLegal, minAcertos, concluido, totalQuestoes }]`
+`concluido: true` se o usuario logado tem `AssinaturaPOP` com `aprovado=true` para aquele documento.
+
+### `GET /api/pops/{id}`
+Retorna detalhe completo do POP: conteudo, questoes (sem `respostaCorreta`), status de conclusao do usuario.
+**Permissao:** qualquer usuario autenticado
+
+### `POST /api/pops/{id}/concluir`
+Submete respostas do quiz, calcula acertos e registra `AssinaturaPOP` se aprovado.
+**Body:** `{ respostas: { questaoId: "b", ... } }`
+**Retorna:** `{ aprovado, acertos, totalQuestoes, minAcertos, feedback: [{ questaoId, correto, respostaCorreta, justificativa }] }`
+**Regras:** retry imediato permitido; `AssinaturaPOP` criada apenas na primeira aprovacao; tentativas subsequentes retornam `jaConcluidoAntes: true`.
+
+### `GET /api/admin/pops`
+Lista todos os POPs do tenant (globais + proprios) com contagem de usuarios que concluiram.
+**Permissao:** `POPS_GERENCIAR` ou `SUPER_ADMIN_GLOBAIS`
+
+### `POST /api/admin/pops`
+Cria POP customizado para o tenant (substitui global de mesmo codigo ou adiciona codigo novo).
+**Permissao:** `POPS_GERENCIAR`
+**Body:** `{ codigo, titulo, baseLegal?, objetivo?, conteudo, versao?, minAcertos?, questoes? }`
+
+---
+
+## Controle de Validade e Quarentena
+
+### `GET /api/validade/lotes`
+Lista lotes do tenant com alerta calculado em runtime.
+**Permissao:** qualquer usuario autenticado (modulo VALIDADE habilitado)
+**Query:** `status?` (`ATIVO`|`QUARENTENA`|`DESCARTADO`), `horizonte?` (`VENCIDO`|`VENCENDO_30`|`VENCENDO_90`)
+**Retorna:** lotes com `diffDias` e `alerta` (`VENCIDO`|`VENCENDO_30`|`VENCENDO_90`|null)
+
+### `POST /api/validade/lotes`
+Cadastra novo lote. Cria produto no catalogo automaticamente se nome nao existir (lookup-or-create).
+**Permissao:** `VALIDADE_GERENCIAR`
+**Body:** `nomeProduto`, `fabricante`, `lote`, `validade` (ISO date), `quantidade`, `unidade`, `localizacao?`, `obs?`
+
+### `PATCH /api/validade/lotes/{id}`
+Edita campos do lote.
+**Permissao:** `VALIDADE_GERENCIAR`
+
+### `POST /api/validade/lotes/{id}/quarentena`
+Move lote de ATIVO para QUARENTENA com registro em AuditLog.
+**Permissao:** `VALIDADE_GERENCIAR`
+**Body:** `obs?`
+
+### `POST /api/validade/lotes/{id}/descartar`
+Registra descarte formal: muda status para DESCARTADO e cria `AutoDescarte` imutavel.
+**Permissao:** `VALIDADE_GERENCIAR`
+**Body:** `numeroAuto`, `motivo`, `dataDescarte`, `responsavel`, `obs?`
+
+### `GET /api/validade/catalogo?q={termo}`
+Autocomplete de produtos do catalogo do tenant. Ate 20 resultados, case-insensitive.
+**Permissao:** qualquer usuario autenticado
+**Retorna:** `[{ id, nome, fabricante, unidadePadrao }]`

@@ -1,7 +1,7 @@
 # Roadmap de Produto — FarmaSign
 
 Baseado no Plano de Expansao RDC 44/2009.  
-Ultima atualizacao: 06/06/2026 — Modulos 1.1 e 1.2 entregues.
+Ultima atualizacao: 06/06/2026 — Modulos 1.1, 1.2, 2.1 e 3.1 entregues.
 
 ---
 
@@ -24,6 +24,8 @@ Funcionalidades entregues e operacionais em `app.farmasign.com.br`:
 - [x] Sistema de modulos por tenant (gerenciador super admin + slug por feature)
 - [x] Controle de Temperatura e Umidade (Modulo 1.1)
 - [x] Gestao de Equipamentos e Calibracao (Modulo 1.2)
+- [x] POPs e E-learning hibrido com quiz (Modulo 2.1)
+- [x] Controle de Validade e Quarentena (Modulo 3.1)
 
 ---
 
@@ -147,57 +149,20 @@ model Equipamento {
 **Prazo estimado:** 8-10 semanas  
 **Impacto:** Alto — comprova treinamento de pessoal (exigencia direta da RDC 44/2009)
 
-### 2.1 Modulo de POPs e Assinatura de Treinamento
+### 2.1 POPs e E-learning Hibrido ✅ Entregue
 
 **Por que e importante:**  
 A RDC exige que todos os funcionarios sejam treinados nos Procedimentos Operacionais Padrao (POPs). Sem evidencia documentada, o fiscal autua mesmo que o treinamento tenha ocorrido.
 
-**Requisitos funcionais:**
-- Upload de documentos POP em PDF por tenant
-- Versionamento (POP-004 v1.0 → v2.0)
-- Lista de funcionarios que precisam assinar cada versao
-- Fluxo de assinatura digital: funcionario recebe link, le o documento, clica "Li e Compreendido"
-- Registro imutavel com: usuario, data/hora, IP de origem
-- Alerta para farmaceutico RT quando funcionario nao assinou em X dias
-- Exportacao PDF de evidencias de treinamento por funcionario ou por POP
-
-**Modelo de dados:**
-
-```prisma
-model DocumentoPOP {
-  id          String   @id @default(uuid())
-  tenantId    String
-  codigo      String   // "POP-004-SERVICOS"
-  nome        String
-  versao      String   // "2.0"
-  driveFileId String?  // PDF no Drive
-  vigente     Boolean  @default(true)
-  criadoPorId String
-  createdAt   DateTime @default(now())
-
-  assinaturas AssinaturaPOP[]
-  tenant      Tenant @relation(fields: [tenantId], references: [id])
-
-  @@unique([tenantId, codigo, versao])
-  @@index([tenantId])
-}
-
-model AssinaturaPOP {
-  id           String   @id @default(uuid())
-  documentoId  String
-  tenantId     String
-  usuarioId    String
-  dataLeitura  DateTime @default(now())
-  aceitouTermos Boolean
-  ipOrigem     String
-  userAgent    String
-
-  documento DocumentoPOP @relation(fields: [documentoId], references: [id])
-
-  @@unique([documentoId, usuarioId])  // uma assinatura por usuario por versao
-  @@index([tenantId])
-}
-```
+**O que foi implementado:**
+- 10 POPs padrao FarmaSign baseados na RDC 44/2009 (conteudo global, `tenantId = null`)
+- Tenants podem sobrepor qualquer POP padrao com conteudo proprio OU adicionar POPs extras
+- E-learning hibrido: leitura de conteudo por secoes + quiz de 3 questoes (minimo 2/3 acertos)
+- Retry imediato sem cooldown — ciencia registrada apenas na primeira aprovacao
+- Registro imutavel: `AssinaturaPOP` com usuario, acertos, respostas, IP de origem e User-Agent
+- Visao gerencial: contagem de conclusoes por POP por tenant
+- Permissao `POPS_GERENCIAR` para gestao de POPs customizados
+- Seed idempotente: `npx tsx prisma/seed-pops.ts`
 
 ---
 
@@ -225,15 +190,17 @@ E o diferencial visivel. O farmaceutico mostra ao fiscal uma unica tela, clica "
 **Prazo estimado:** 10-12 semanas  
 **Impacto:** Alto (especialmente para lojas com grande volume de medicamentos)
 
-### 3.1 Controle de Validade e Quarentena
+### 3.1 Controle de Validade e Quarentena ✅ Entregue
 
-**Requisitos funcionais:**
-- Cadastro de lotes de produtos com validade
-- Alertas automaticos: 90 dias antes do vencimento, 30 dias, dia do vencimento
-- Fluxo de quarentena: produto segregado fisicamente, registrado no sistema como QUARENTENA
-- Registro de inutilizacao com numero do auto de descarte
-- Historico de produtos vencidos (evidencia de controle para vistoria)
-- Dashboard de proximos vencimentos
+**O que foi implementado:**
+- Catalogo hibrido de produtos: cadastro livre por nome cria entrada automatica no catalogo do tenant para reuso com autocomplete
+- Lotes com: numero do lote, fabricante, validade, quantidade + unidade (un/cx/mL/g/mg/L/kg/comp/amp/fr), localizacao fisica, observacoes
+- Alertas automaticos em 3 horizontes: VENCENDO_90 (90 dias), VENCENDO_30 (30 dias), VENCIDO
+- Fluxo de quarentena com segregacao fisica registrada no sistema
+- Auto de Descarte formal: numero do auto, motivo, data, responsavel — registro imutavel
+- Cron diario (08h UTC): `GET /api/cron/alertas-validade` registra AuditLog por tenant com contagem por horizonte
+- Dashboard com abas Alertas / Quarentena / Todos e modais de acao por lote
+- Permissao `VALIDADE_GERENCIAR` para cadastro e fluxo de quarentena/descarte
 
 ### 3.2 Rastreabilidade de Fracionamento
 
@@ -273,14 +240,14 @@ Os PDFs gerados para vistoria devem ter:
 
 ## Matriz de Priorizacao (Consolidada)
 
-| Modulo | Impacto Vistoria | Complexidade | Prioridade | Fase |
-|---|---|---|---|---|
-| Temperatura/Umidade | Altissimo | Baixa | **Critica** | 1 |
-| Equipamentos/Calibracao | Alto | Baixa | Alta | 1 |
-| POPs e Treinamentos | Alto | Media | Alta | 2 |
-| Painel do Fiscal | Altissimo | Media | Alta | 2 |
-| Validade/Quarentena | Altissimo | Media | Alta | 3 |
-| Fracionamento | Medio | Media | Media | 3 |
+| Modulo | Impacto Vistoria | Complexidade | Prioridade | Fase | Status |
+|---|---|---|---|---|---|
+| Temperatura/Umidade | Altissimo | Baixa | **Critica** | 1 | ✅ Entregue |
+| Equipamentos/Calibracao | Alto | Baixa | Alta | 1 | ✅ Entregue |
+| POPs e Treinamentos | Alto | Media | Alta | 2 | ✅ Entregue |
+| Validade/Quarentena | Altissimo | Media | Alta | 3 | ✅ Entregue |
+| Painel do Fiscal | Altissimo | Media | Alta | 2 | Pendente |
+| Fracionamento | Medio | Alta | Media | 3 | Pendente |
 
 ---
 

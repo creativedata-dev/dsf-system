@@ -22,10 +22,17 @@ Tenant (1)
   ├── Ambiente (N)
   │     └── RegistroTermoHigrometria (N)
   ├── Equipamento (N)
+  ├── DocumentoPOP (N)  [ou tenantId=null para conteudo global]
+  │     ├── QuestaoQuiz (N)
+  │     └── AssinaturaPOP (N)
+  ├── ProdutoCatalogo (N)
+  │     └── LoteProduto (N)
+  │           └── AutoDescarte (0-1)
   └── AuditLog (N)
 
 Plano (N)          — configuracao global, sem tenantId
 GatewayConfig (N)  — configuracao global, sem tenantId
+DocumentoPOP (N)   — tenantId=null = conteudo padrao FarmaSign (global)
 ```
 
 ---
@@ -39,6 +46,8 @@ DSF_EMITIR           DSF_CANCELAR
 ANVISA_RELATORIOS    DRIVE_CONFIGURAR
 TEMPERATURA_GERENCIAR
 EQUIPAMENTOS_GERENCIAR
+POPS_GERENCIAR
+VALIDADE_GERENCIAR
 SUPER_ADMIN_GLOBAIS
 ```
 
@@ -97,6 +106,8 @@ PLANO_CRIADO  PLANO_ATUALIZADO
 AMBIENTE_CRIADO  AMBIENTE_ATUALIZADO
 TEMPERATURA_REGISTRADA  CRON_ALERTAS_TEMPERATURA
 EQUIPAMENTO_CRIADO  EQUIPAMENTO_ATUALIZADO  CRON_ALERTAS_EQUIPAMENTOS
+POP_CONCLUIDO  POP_REPROVADO  POP_CRIADO  POP_ATUALIZADO
+LOTE_CRIADO  LOTE_ATUALIZADO  LOTE_QUARENTENA  LOTE_DESCARTADO  CRON_ALERTAS_VALIDADE
 ```
 
 ---
@@ -343,6 +354,110 @@ Se nenhuma config existir para um tenant, todos os servicos aparecem ativos por 
 - `MANUTENCAO` — definido manualmente, nao sobrescrito pelo cron
 
 **Indices:** `[tenantId]`, `[dataProximaCalibracao]`
+
+---
+
+### `DocumentoPOP`
+| Campo | Tipo | Descricao |
+|---|---|---|
+| `tenantId` | FK Tenant? | null = conteudo global FarmaSign; preenchido = conteudo proprio do tenant |
+| `codigo` | String | `"POP-01"` a `"POP-10"` (padrao) ou codigo proprio |
+| `titulo` | String | Titulo do POP |
+| `baseLegal` | String? | Ex: `"Art. 18, RDC 44/2009"` |
+| `objetivo` | String? | Texto de objetivo do procedimento |
+| `conteudo` | String | Texto completo com secoes separadas por `"### Titulo\n\n"` |
+| `versao` | String | Default `"1.0"` |
+| `minAcertos` | Int | Minimo de acertos no quiz para aprovacao. Default `2` |
+| `vigente` | Boolean | Soft-disable de versao desatualizada |
+
+**Logica de lookup (GET /api/pops):** para cada codigo, o conteudo tenant-especifico sobrepoe o global; tenants podem ter POPs adicionais sem codigo global correspondente.
+
+**Indices:** `[tenantId]`, `[codigo]`
+
+---
+
+### `QuestaoQuiz`
+| Campo | Tipo | Descricao |
+|---|---|---|
+| `documentoId` | FK DocumentoPOP | |
+| `ordem` | Int | 1, 2, 3... |
+| `enunciado` | String | Texto da questao |
+| `opcoes` | Json | `[{letra:"a",texto:"..."}, ...]` — sempre 4 opcoes |
+| `respostaCorreta` | String | `"a"` \| `"b"` \| `"c"` \| `"d"` — nunca exposto ao frontend |
+| `justificativa` | String? | Comentario exibido apos o quiz |
+
+---
+
+### `AssinaturaPOP`
+| Campo | Tipo | Descricao |
+|---|---|---|
+| `documentoId` | FK DocumentoPOP | |
+| `tenantId` | FK Tenant | Desnormalizado para queries rapidas |
+| `usuarioId` | String | Quem concluiu |
+| `acertos` | Int | Numero de acertos |
+| `totalQuestoes` | Int | Total de questoes no momento da tentativa |
+| `aprovado` | Boolean | `acertos >= minAcertos` |
+| `respostas` | Json | `{questaoId: "b", ...}` — para auditoria |
+| `ipOrigem` | String | IP real para registro de conformidade |
+| `userAgent` | String | |
+
+Multiplos registros permitidos (tentativas); apenas registros com `aprovado=true` contam como ciencia. Retentativa imediata sem cooldown.
+
+**Indices:** `[documentoId, usuarioId]`, `[tenantId]`
+
+---
+
+### `ProdutoCatalogo`
+| Campo | Tipo | Descricao |
+|---|---|---|
+| `tenantId` | FK Tenant | |
+| `nome` | String | Nome do produto — `@@unique([tenantId, nome])` |
+| `fabricante` | String? | Fabricante padrao para pre-preencher o formulario |
+| `unidadePadrao` | String | Default `"un"` — pre-preenche unidade no formulario |
+| `ativo` | Boolean | Soft-delete |
+
+Criado automaticamente ao cadastrar o primeiro lote de um produto novo (lookup-or-create por nome). Cresce organicamente; nao requer cadastro previo.
+
+---
+
+### `LoteProduto`
+| Campo | Tipo | Descricao |
+|---|---|---|
+| `tenantId` | FK Tenant | |
+| `produtoCatalogoId` | FK ProdutoCatalogo | |
+| `fabricante` | String | Fabricante do lote especifico |
+| `lote` | String | Numero do lote impresso na embalagem |
+| `validade` | Date | `@db.Date` — base para calculo de alertas |
+| `quantidade` | Decimal(10,3) | |
+| `unidade` | String | `"un"` \| `"cx"` \| `"mL"` \| `"g"` \| `"mg"` \| `"L"` \| `"kg"` \| `"comp"` \| `"amp"` \| `"fr"` |
+| `status` | String | `ATIVO` \| `QUARENTENA` \| `DESCARTADO` |
+| `localizacao` | String? | Localizacao fisica: `"Prateleira A3"`, `"Geladeira 1"` |
+| `obs` | String? | |
+| `ativo` | Boolean | Soft-delete |
+
+**Alertas calculados em runtime** (`GET /api/validade/lotes`):
+- `diffDias < 0` → `alerta: "VENCIDO"`
+- `diffDias <= 30` → `alerta: "VENCENDO_30"`
+- `diffDias <= 90` → `alerta: "VENCENDO_90"`
+- `diffDias > 90` → `alerta: null`
+
+**Indices:** `[tenantId]`, `[validade]`, `[tenantId, status]`
+
+---
+
+### `AutoDescarte`
+| Campo | Tipo | Descricao |
+|---|---|---|
+| `loteId` | FK LoteProduto UNIQUE | Um auto por lote (descarte e definitivo) |
+| `tenantId` | FK Tenant | |
+| `usuarioId` | String | Quem registrou |
+| `numeroAuto` | String | Numero do auto de descarte/inutilizacao |
+| `motivo` | String | `"Vencimento"` \| `"Contaminacao"` \| `"Embalagem danificada"` \| etc. |
+| `dataDescarte` | Date | `@db.Date` |
+| `responsavel` | String | Nome do responsavel pelo descarte fisico |
+| `obs` | String? | |
+
+Registro imutavel — nao permite edicao apos criacao. Exigencia ANVISA para rastreabilidade de inutilizacao.
 
 ---
 

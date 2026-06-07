@@ -44,11 +44,18 @@ Tenant (1)
   ├── Ambiente (N)
   │     └── RegistroTermoHigrometria (N)
   ├── Equipamento (N)
+  ├── DocumentoPOP (N)  [ou tenantId=null para conteudo global]
+  │     ├── QuestaoQuiz (N)
+  │     └── AssinaturaPOP (N)
+  ├── ProdutoCatalogo (N)
+  │     └── LoteProduto (N)
+  │           └── AutoDescarte (0-1)
   └── AuditLog (N)
 
 Plano (N) ──► Assinatura (N)
 GatewayConfig — configuracao global (sem tenant)
 PagamentoLog (N) ──► Assinatura
+DocumentoPOP (tenantId=null) — conteudo padrao FarmaSign compartilhado
 ```
 
 Toda query de escrita/leitura passa pela verificacao `where: { tenantId: session.user.tenantId }` no nivel da API Route — nunca delegado ao frontend. Tenants "internos" (com usuario `SUPER_ADMIN_GLOBAIS`) sao filtrados automaticamente nas listagens administrativas.
@@ -71,6 +78,8 @@ Em vez de roles fixas, cada usuario tem um array de permissoes explicitamente co
 | `DRIVE_CONFIGURAR` | Conectar Google Drive e configurar procedimentos |
 | `TEMPERATURA_GERENCIAR` | Cadastrar e editar ambientes monitorados |
 | `EQUIPAMENTOS_GERENCIAR` | Cadastrar, editar equipamentos e fazer upload de laudos/fotos |
+| `POPS_GERENCIAR` | Criar e editar POPs customizados do tenant |
+| `VALIDADE_GERENCIAR` | Cadastrar lotes, mover para quarentena e registrar descartes |
 | `SUPER_ADMIN_GLOBAIS` | Gestao global de tenants, planos, gateways |
 
 ### Perfis Tipicos
@@ -114,8 +123,9 @@ Cada tenant tem um campo `modulosHabilitados String[]` que controla quais featur
 | `DSF` | Emissao DSF | — (condicional no nav) |
 | `TEMPERATURA` | Temperatura e Umidade | `/dashboard/temperatura` |
 | `EQUIPAMENTOS` | Equipamentos e Calibracao | `/dashboard/equipamentos` |
-| `POPS` | POPs e Treinamentos | `/dashboard/pops` (futuro) |
-| `PAINEL_FISCAL` | Painel do Fiscal | `/dashboard/fiscal` (futuro) |
+| `POPS` | POPs e Treinamentos | `/dashboard/pops` |
+| `VALIDADE` | Controle de Validade | `/dashboard/validade` |
+| `PAINEL_FISCAL` | Painel do Fiscal | `/dashboard/fiscal` (pendente) |
 
 **Retrocompatibilidade:** array vazio = todos os modulos habilitados (tenants legados nao sao afetados).
 
@@ -293,11 +303,17 @@ src/
       ambientes/            CRUD de ambientes monitorados
       temperatura/          Lancamento, historico, export PDF, upload foto
       equipamentos/         CRUD equipamentos, upload laudo/foto
+      pops/                 Leitura, quiz e conclusao de POPs
+      admin/pops/           Gestao de POPs customizados (POPS_GERENCIAR)
+      validade/
+        lotes/              CRUD de lotes, quarentena, descarte
+        catalogo/           Autocomplete de produtos
       cron/
         cleanup-dsf/        Cancela DSFs EMITIDA > 24h
         expirar-assinaturas/ Marca assinaturas expiradas
         alertas-temperatura/ Verifica omissoes de leitura do dia anterior
         alertas-equipamentos/ Atualiza status VENCENDO/VENCIDO
+        alertas-validade/   Verifica lotes com validade em 90d/30d/vencidos
     auth/login/             Pagina de login
     dashboard/
       layout.tsx            Shell + verificacao de assinatura (Server)
@@ -316,6 +332,8 @@ src/
       configuracoes/        Integracao Google Drive
       temperatura/          Lancamentos + ambientes + historico + export PDF
       equipamentos/         Lista + CRUD + upload laudo/foto
+      pops/                 E-learning: lista → leitura → quiz → resultado
+      validade/             Lotes por validade: alertas / quarentena / descarte
   components/
     dashboard-shell.tsx     Layout responsivo + badge de assinatura
     pwa-register.tsx        Registro do service worker (client)
