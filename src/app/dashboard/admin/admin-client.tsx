@@ -28,6 +28,7 @@ const ALL_PERMISSIONS: { value: string; label: string }[] = [
   { value: 'EQUIPAMENTOS_GERENCIAR', label: 'Gerenciar Equipamentos' },
   { value: 'POPS_GERENCIAR',         label: 'Gerenciar POPs' },
   { value: 'VALIDADE_GERENCIAR',     label: 'Controle de Validade' },
+  { value: 'PAINEL_FISCAL_GERENCIAR', label: 'Painel do Fiscal' },
   { value: 'SUPER_ADMIN_GLOBAIS',    label: 'Super Admin' },
 ]
 
@@ -43,6 +44,7 @@ const PERM_COLORS: Record<string, string> = {
   EQUIPAMENTOS_GERENCIAR:'bg-teal-100 text-teal-700',
   POPS_GERENCIAR:       'bg-violet-100 text-violet-700',
   VALIDADE_GERENCIAR:   'bg-rose-100 text-rose-700',
+  PAINEL_FISCAL_GERENCIAR: 'bg-orange-100 text-orange-700',
 }
 
 const PERM_LABEL: Record<string, string> = Object.fromEntries(

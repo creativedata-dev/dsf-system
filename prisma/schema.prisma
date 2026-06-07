@@ -20,6 +20,7 @@ enum Permission {
   EQUIPAMENTOS_GERENCIAR
   POPS_GERENCIAR
   VALIDADE_GERENCIAR
+  PAINEL_FISCAL_GERENCIAR
   SUPER_ADMIN_GLOBAIS
 }
 
@@ -87,6 +88,9 @@ enum AuditAcao {
   LOTE_QUARENTENA
   LOTE_DESCARTADO
   CRON_ALERTAS_VALIDADE
+  TOKEN_FISCAL_GERADO
+  TOKEN_FISCAL_ABERTO
+  TOKEN_FISCAL_REENVIADO
 }
 
 enum TipoPlano {
@@ -143,6 +147,7 @@ model Tenant {
   produtosCatalogo     ProdutoCatalogo[]
   lotesProduto         LoteProduto[]
   autoDescartes        AutoDescarte[]
+  tokensFiscal         TokenFiscal[]
 }
 
 model User {
@@ -157,10 +162,12 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  tenant            Tenant     @relation(fields: [tenantId], references: [id])
-  dsfsComoRT        DSF[]      @relation("ResponsavelTecnico")
-  dsfsComoAtendente DSF[]      @relation("Atendente")
+  tenant            Tenant        @relation(fields: [tenantId], references: [id])
+  dsfsComoRT        DSF[]         @relation("ResponsavelTecnico")
+  dsfsComoAtendente DSF[]         @relation("Atendente")
   auditLogs         AuditLog[]
+  assinaturasPOP    AssinaturaPOP[]
+  registrosTemp     RegistroTermoHigrometria[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -415,6 +422,7 @@ model RegistroTermoHigrometria {
   fotoUrl    String?
 
   ambiente Ambiente @relation(fields: [ambienteId], references: [id])
+  usuario  User     @relation(fields: [usuarioId], references: [id])
 
   @@unique([ambienteId, dataLeitura, periodo])
   @@index([tenantId, dataLeitura(sort: Desc)])
@@ -473,6 +481,7 @@ model AssinaturaPOP {
 
   documento DocumentoPOP @relation(fields: [documentoId], references: [id])
   tenant    Tenant       @relation(fields: [tenantId], references: [id])
+  usuario   User         @relation(fields: [usuarioId], references: [id])
 
   @@index([documentoId, usuarioId])
   @@index([tenantId])
@@ -537,4 +546,38 @@ model AutoDescarte {
   tenant Tenant      @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
+}
+
+// ─── Módulo 2.2 — Painel do Fiscal ──────────────────────────────────────────
+
+model TokenFiscal {
+  id         String    @id @default(uuid())
+  tenantId   String
+  usuarioId  String
+  token      String    @unique @default(uuid())
+  secoes     String[]  // ["TEMPERATURA","EQUIPAMENTOS","POPS","VALIDADE"]
+  dataInicio DateTime  @db.Date
+  dataFim    DateTime  @db.Date
+  expiraEm   DateTime  // createdAt + 30 min
+  usadoEm    DateTime? // set na primeira visualizacao (expira imediatamente apos)
+  createdAt  DateTime  @default(now())
+
+  tenant Tenant           @relation(fields: [tenantId], references: [id])
+  logs   TokenFiscalLog[]
+
+  @@index([tenantId])
+  @@index([token])
+}
+
+model TokenFiscalLog {
+  id        String   @id @default(uuid())
+  tokenId   String
+  evento    String   // "GERADO" | "ABERTO" | "REENVIADO"
+  ip        String
+  userAgent String
+  createdAt DateTime @default(now())
+
+  token TokenFiscal @relation(fields: [tokenId], references: [id])
+
+  @@index([tokenId])
 }
