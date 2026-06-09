@@ -2,7 +2,7 @@
 
 ## Visao Geral
 
-SaaS multi-tenant para drogarias gerenciarem conformidade com ANVISA RDC 44/2009 e LGPD (Lei 13.709/2018): emissao de DSF, controle de temperatura/umidade, gestao de equipamentos e calibracao.
+SaaS multi-tenant para drogarias gerenciarem conformidade com ANVISA RDC 44/2009 e LGPD (Lei 13.709/2018): emissao de DSF, controle de temperatura/umidade, gestao de equipamentos, calibracao, POPs, controle de validade e rastreabilidade de fracionamento.
 
 URL de producao: `https://app.farmasign.com.br`
 
@@ -49,7 +49,9 @@ Tenant (1)
   │     └── AssinaturaPOP (N)
   ├── ProdutoCatalogo (N)
   │     └── LoteProduto (N)
-  │           └── AutoDescarte (0-1)
+  │           ├── AutoDescarte (0-1)
+  │           └── FracionamentoLote (N)
+  │                 └── FracaoItem (N)
   └── AuditLog (N)
 
 Plano (N) ──► Assinatura (N)
@@ -80,6 +82,8 @@ Em vez de roles fixas, cada usuario tem um array de permissoes explicitamente co
 | `EQUIPAMENTOS_GERENCIAR` | Cadastrar, editar equipamentos e fazer upload de laudos/fotos |
 | `POPS_GERENCIAR` | Criar e editar POPs customizados do tenant |
 | `VALIDADE_GERENCIAR` | Cadastrar lotes, mover para quarentena e registrar descartes |
+| `PAINEL_FISCAL_GERENCIAR` | Gerar e visualizar pacote de conformidade para vistoria |
+| `FRACIONAMENTO_GERENCIAR` | Registrar fracionamentos e imprimir etiquetas QR Code |
 | `SUPER_ADMIN_GLOBAIS` | Gestao global de tenants, planos, gateways |
 
 ### Perfis Tipicos
@@ -126,6 +130,7 @@ Cada tenant tem um campo `modulosHabilitados String[]` que controla quais featur
 | `POPS` | POPs e Treinamentos | `/dashboard/pops` |
 | `VALIDADE` | Controle de Validade | `/dashboard/validade` |
 | `PAINEL_FISCAL` | Painel do Fiscal | `/dashboard/fiscal` |
+| `FRACIONAMENTO` | Fracionamento | `/dashboard/fracionamento` |
 
 **Retrocompatibilidade:** array vazio = todos os modulos habilitados (tenants legados nao sao afetados).
 
@@ -308,6 +313,9 @@ src/
       validade/
         lotes/              CRUD de lotes, quarentena, descarte
         catalogo/           Autocomplete de produtos
+      fracionamento/        Registro de fracionamentos e fracoes
+        [id]/
+          etiqueta/         Gera PDF de etiquetas 80x50mm com QR Code
       fiscal/
         [token]/pdf/        Exporta PDF do pacote de conformidade via token temporario
       cron/
@@ -336,6 +344,7 @@ src/
       equipamentos/         Lista + CRUD + upload laudo/foto
       pops/                 E-learning: lista → leitura → quiz → resultado
       validade/             Lotes por validade: alertas / quarentena / descarte
+      fracionamento/        Registro de fracionamentos e impressao de etiquetas QR Code
       fiscal/               Painel do Fiscal — resumo de conformidade
     fiscal/[token]/         Visualizacao publica do pacote de conformidade (link temporario)
   components/
@@ -352,6 +361,7 @@ src/
     drive.ts                Upload Drive com refresh de token (PDF e imagem)
     modulos.ts              Definicao dos modulos e helper hasModulo()
     pdf-temperatura.ts      Gerador PDF de historico de temperatura (pdf-lib)
+    pdf-etiqueta.ts         Gerador de etiquetas 80x50mm com QR Code (pdf-lib + qrcode)
   types/
     next-auth.d.ts          Augmentacao de tipos NextAuth
   generated/prisma/         Cliente Prisma gerado (npx prisma generate)

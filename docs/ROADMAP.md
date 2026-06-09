@@ -1,7 +1,7 @@
 # Roadmap de Produto — FarmaSign
 
 Baseado no Plano de Expansao RDC 44/2009.  
-Ultima atualizacao: 08/06/2026 — Modulos 1.1, 1.2, 2.1, 2.2 e 3.1 entregues.
+Ultima atualizacao: 08/06/2026 — Modulos 1.1, 1.2, 2.1, 2.2, 3.1 e 3.2 entregues.
 
 ---
 
@@ -27,6 +27,7 @@ Funcionalidades entregues e operacionais em `app.farmasign.com.br`:
 - [x] POPs e E-learning hibrido com quiz (Modulo 2.1)
 - [x] Controle de Validade e Quarentena (Modulo 3.1)
 - [x] Painel do Fiscal com link temporario publico (Modulo 2.2)
+- [x] Rastreabilidade de Fracionamento com etiquetas QR Code (Modulo 3.2)
 
 ---
 
@@ -196,14 +197,19 @@ E o diferencial visivel. O farmaceutico mostra ao fiscal uma unica tela com o re
 - Dashboard com abas Alertas / Quarentena / Todos e modais de acao por lote
 - Permissao `VALIDADE_GERENCIAR` para cadastro e fluxo de quarentena/descarte
 
-### 3.2 Rastreabilidade de Fracionamento
+### 3.2 Rastreabilidade de Fracionamento ✅ Entregue
 
 **Apenas para tenants com fracionamento habilitado.**
 
-**Requisitos funcionais:**
-- Vinculo do fracionamento ao lote original (fabricante, lote, validade)
-- Geracao de etiqueta impressa com codigo de barras/QR
-- Rastreio: embalagem original → fracoes geradas → destinacao
+**O que foi implementado:**
+- Vinculo do fracionamento ao lote original (fabricante, lote, validade) via modelo `FracionamentoLote → LoteProduto`
+- Registro de N fracoes por evento com quantidade, unidade e destinacao opcional (`FracaoItem`)
+- Geracao de etiqueta PDF 80x50mm com QR Code por fracao (pdf-lib + qrcode) — QR encoda produto, lote, validade, quantidade e numero da fracao
+- Timestamp imutavel de impressao por fracao (`etiquetaImpressaEm`)
+- API: GET/POST `/api/fracionamento`, PATCH `/api/fracionamento/[id]`, GET `/api/fracionamento/[id]/etiqueta`
+- Dashboard `/dashboard/fracionamento` com lista expansivel, modal de registro e impressao individual ou em lote
+- Permissao `FRACIONAMENTO_GERENCIAR` e auditoria completa (`FRACAO_CRIADA`, `FRACAO_ATUALIZADA`, `ETIQUETA_IMPRESSA`)
+- Modulo `FRACIONAMENTO` com controle de acesso por tenant
 
 ---
 
@@ -241,7 +247,7 @@ Os PDFs gerados para vistoria devem ter:
 | POPs e Treinamentos | Alto | Media | Alta | 2 | ✅ Entregue |
 | Validade/Quarentena | Altissimo | Media | Alta | 3 | ✅ Entregue |
 | Painel do Fiscal | Altissimo | Media | Alta | 2 | ✅ Entregue |
-| Fracionamento | Medio | Alta | Media | 3 | Pendente |
+| Fracionamento | Medio | Alta | Media | 3 | ✅ Entregue |
 
 ---
 
