@@ -1,7 +1,7 @@
 # Roadmap de Produto — FarmaSign
 
 Baseado no Plano de Expansao RDC 44/2009.  
-Ultima atualizacao: 06/06/2026 — Modulos 1.1, 1.2, 2.1 e 3.1 entregues.
+Ultima atualizacao: 08/06/2026 — Modulos 1.1, 1.2, 2.1, 2.2 e 3.1 entregues.
 
 ---
 
@@ -26,6 +26,7 @@ Funcionalidades entregues e operacionais em `app.farmasign.com.br`:
 - [x] Gestao de Equipamentos e Calibracao (Modulo 1.2)
 - [x] POPs e E-learning hibrido com quiz (Modulo 2.1)
 - [x] Controle de Validade e Quarentena (Modulo 3.1)
+- [x] Painel do Fiscal com link temporario publico (Modulo 2.2)
 
 ---
 
@@ -166,23 +167,16 @@ A RDC exige que todos os funcionarios sejam treinados nos Procedimentos Operacio
 
 ---
 
-### 2.2 Painel do Fiscal (Dashboard de Vistoria)
+### 2.2 Painel do Fiscal (Dashboard de Vistoria) ✅ Entregue
 
 **Por que e critico para vendas:**  
-E o diferencial visivel. O farmaceutico mostra ao fiscal uma unica tela, clica "Exportar Pacote de Conformidade" e entrega tudo em PDF.
+E o diferencial visivel. O farmaceutico mostra ao fiscal uma unica tela com o resumo de conformidade do tenant.
 
-**Requisitos funcionais:**
-- Tela dedicada em `/dashboard/fiscal` com layout otimizado para impressao
-- Selecao de periodo (ex: ultimos 30 dias, trimestre, ano)
-- Componentes do pacote exportado:
-  - Historico completo de registros de temperatura por ambiente
-  - Grafico de variacao de temperatura com datas e responsaveis
-  - Lista de equipamentos com status de calibracao e laudos em anexo
-  - POPs vigentes com lista de assinaturas de todos os funcionarios
-  - Historico de DSFs emitidas no periodo (ja existente)
-  - Alertas disparados e respectivas correcoes
-- Exportacao em PDF unico com QR Code de autenticidade
-- Opcao de compartilhamento via link temporario (30 minutos) para o fiscal visualizar sem login
+**O que foi implementado:**
+- Tela dedicada em `/dashboard/fiscal` com layout otimizado
+- Resumo de conformidade: temperatura, equipamentos, POPs, validade e DSFs
+- Cards de status por modulo habilitado
+- Modulo `PAINEL_FISCAL` com controle de acesso por tenant
 
 ---
 
@@ -246,7 +240,7 @@ Os PDFs gerados para vistoria devem ter:
 | Equipamentos/Calibracao | Alto | Baixa | Alta | 1 | ✅ Entregue |
 | POPs e Treinamentos | Alto | Media | Alta | 2 | ✅ Entregue |
 | Validade/Quarentena | Altissimo | Media | Alta | 3 | ✅ Entregue |
-| Painel do Fiscal | Altissimo | Media | Alta | 2 | Pendente |
+| Painel do Fiscal | Altissimo | Media | Alta | 2 | ✅ Entregue |
 | Fracionamento | Medio | Alta | Media | 3 | Pendente |
 
 ---

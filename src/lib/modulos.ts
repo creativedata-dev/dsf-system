@@ -42,6 +42,12 @@ export const MODULOS_DISPONIVEIS: ModuloDefinition[] = [
     descricao: 'Exportação de pacote de conformidade em PDF único para vistorias da Vigilância Sanitária',
     icone: '🗂️',
   },
+  {
+    slug: 'FRACIONAMENTO',
+    label: 'Fracionamento',
+    descricao: 'Rastreabilidade de fracionamento de medicamentos com etiquetas QR Code vinculadas ao lote original',
+    icone: '✂️',
+  },
 ]
 
 export const MODULOS_SLUGS = MODULOS_DISPONIVEIS.map(m => m.slug)

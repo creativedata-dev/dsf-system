@@ -125,7 +125,7 @@ Cada tenant tem um campo `modulosHabilitados String[]` que controla quais featur
 | `EQUIPAMENTOS` | Equipamentos e Calibracao | `/dashboard/equipamentos` |
 | `POPS` | POPs e Treinamentos | `/dashboard/pops` |
 | `VALIDADE` | Controle de Validade | `/dashboard/validade` |
-| `PAINEL_FISCAL` | Painel do Fiscal | `/dashboard/fiscal` (pendente) |
+| `PAINEL_FISCAL` | Painel do Fiscal | `/dashboard/fiscal` |
 
 **Retrocompatibilidade:** array vazio = todos os modulos habilitados (tenants legados nao sao afetados).
 
@@ -308,6 +308,8 @@ src/
       validade/
         lotes/              CRUD de lotes, quarentena, descarte
         catalogo/           Autocomplete de produtos
+      fiscal/
+        [token]/pdf/        Exporta PDF do pacote de conformidade via token temporario
       cron/
         cleanup-dsf/        Cancela DSFs EMITIDA > 24h
         expirar-assinaturas/ Marca assinaturas expiradas
@@ -334,6 +336,8 @@ src/
       equipamentos/         Lista + CRUD + upload laudo/foto
       pops/                 E-learning: lista → leitura → quiz → resultado
       validade/             Lotes por validade: alertas / quarentena / descarte
+      fiscal/               Painel do Fiscal — resumo de conformidade
+    fiscal/[token]/         Visualizacao publica do pacote de conformidade (link temporario)
   components/
     dashboard-shell.tsx     Layout responsivo + badge de assinatura
     pwa-register.tsx        Registro do service worker (client)

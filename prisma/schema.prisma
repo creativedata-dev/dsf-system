@@ -21,6 +21,7 @@ enum Permission {
   POPS_GERENCIAR
   VALIDADE_GERENCIAR
   PAINEL_FISCAL_GERENCIAR
+  FRACIONAMENTO_GERENCIAR
   SUPER_ADMIN_GLOBAIS
 }
 
@@ -91,6 +92,9 @@ enum AuditAcao {
   TOKEN_FISCAL_GERADO
   TOKEN_FISCAL_ABERTO
   TOKEN_FISCAL_REENVIADO
+  FRACAO_CRIADA
+  FRACAO_ATUALIZADA
+  ETIQUETA_IMPRESSA
 }
 
 enum TipoPlano {
@@ -148,6 +152,8 @@ model Tenant {
   lotesProduto         LoteProduto[]
   autoDescartes        AutoDescarte[]
   tokensFiscal         TokenFiscal[]
+  fracionamentos       FracionamentoLote[]
+  fracoesItens         FracaoItem[]
 }
 
 model User {
@@ -521,9 +527,10 @@ model LoteProduto {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  tenant   Tenant          @relation(fields: [tenantId], references: [id])
-  produto  ProdutoCatalogo @relation(fields: [produtoCatalogoId], references: [id])
-  descarte AutoDescarte?
+  tenant         Tenant              @relation(fields: [tenantId], references: [id])
+  produto        ProdutoCatalogo     @relation(fields: [produtoCatalogoId], references: [id])
+  descarte       AutoDescarte?
+  fracionamentos FracionamentoLote[]
 
   @@index([tenantId])
   @@index([validade])
@@ -580,4 +587,44 @@ model TokenFiscalLog {
   token TokenFiscal @relation(fields: [tokenId], references: [id])
 
   @@index([tokenId])
+}
+
+// ─── Módulo 3.2 — Rastreabilidade de Fracionamento ───────────────────────────
+
+model FracionamentoLote {
+  id                   String   @id @default(uuid())
+  tenantId             String
+  loteId               String
+  usuarioId            String
+  dataFracionamento    DateTime @default(now())
+  quantidadeFracionada Decimal  @db.Decimal(10, 3)
+  unidadeOrigem        String
+  totalFracoes         Int
+  obs                  String?
+  createdAt            DateTime @default(now())
+
+  tenant  Tenant      @relation(fields: [tenantId], references: [id])
+  lote    LoteProduto @relation(fields: [loteId], references: [id])
+  fracoes FracaoItem[]
+
+  @@index([tenantId])
+  @@index([loteId])
+}
+
+model FracaoItem {
+  id                 String    @id @default(uuid())
+  tenantId           String
+  fracionamentoId    String
+  numero             Int
+  quantidade         Decimal   @db.Decimal(10, 3)
+  unidade            String
+  destinacao         String?
+  etiquetaImpressaEm DateTime?
+  createdAt          DateTime  @default(now())
+
+  tenant        Tenant            @relation(fields: [tenantId], references: [id])
+  fracionamento FracionamentoLote @relation(fields: [fracionamentoId], references: [id])
+
+  @@index([tenantId])
+  @@index([fracionamentoId])
 }
