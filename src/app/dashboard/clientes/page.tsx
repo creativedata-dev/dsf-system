@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
 
 /* ─── Types ──────────────────────────────────────────────────────────────────── */
@@ -88,6 +88,14 @@ export default function ClientesPage() {
   const [mode, setMode] = useState<Mode>('idle')
   const [cpfInput, setCpfInput] = useState('')
   const [searchedCpf, setSearchedCpf] = useState('')
+
+  /* autocomplete */
+  const [searchQuery, setSearchQuery] = useState('')
+  const [suggestions, setSuggestions] = useState<{ id: string; nome: string; cpf: string; dataNascimento: string | null }[]>([])
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [suggestLoading, setSuggestLoading] = useState(false)
+  const searchContainerRef = useRef<HTMLDivElement>(null)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [cliente, setCliente] = useState<ClienteData | null>(null)
   const [receiptDsf, setReceiptDsf] = useState<ReceiptDsf | null>(null)
   const [dsfHistory, setDsfHistory] = useState<DsfHistoryItem[]>([])
@@ -179,9 +187,60 @@ export default function ClientesPage() {
     if (digits.length !== 11) return
     const formatted = digits.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')
     setCpfInput(formatted)
+    setSearchQuery(formatted)
     runSearch(digits)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  /* ── Autocomplete ───────────────────────────────────────────────────────────── */
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
+
+  const fetchSuggestions = useCallback(async (q: string) => {
+    if (q.length < 2) { setSuggestions([]); setShowSuggestions(false); return }
+    setSuggestLoading(true)
+    try {
+      const res = await fetch(`/api/clients/search?q=${encodeURIComponent(q)}`)
+      if (res.ok) {
+        const data = await res.json()
+        setSuggestions(Array.isArray(data) ? data : data ? [data] : [])
+        setShowSuggestions(true)
+      }
+    } finally {
+      setSuggestLoading(false)
+    }
+  }, [])
+
+  function handleSearchQueryChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const raw = e.target.value
+    const looksLikeCpf = /^[\d.\-]+$/.test(raw)
+    const val = looksLikeCpf ? fmtCpf(raw) : raw
+    setSearchQuery(val)
+    setCpfInput(looksLikeCpf ? val : '')
+    if (mode !== 'idle') setMode('idle')
+
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      const q = looksLikeCpf ? val.replace(/\D/g, '') : val
+      fetchSuggestions(q)
+    }, 300)
+  }
+
+  function handleSuggestionSelect(s: { id: string; nome: string; cpf: string }) {
+    setShowSuggestions(false)
+    const formatted = fmtCpf(s.cpf)
+    setSearchQuery(formatted)
+    setCpfInput(formatted)
+    runSearch(s.cpf)
+  }
 
   /* ── Search ─────────────────────────────────────────────────────────────────── */
 
@@ -212,9 +271,13 @@ export default function ClientesPage() {
 
   async function handleSearch(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    const digits = cpfInput.replace(/\D/g, '')
-    if (digits.length < 11) return
-    await runSearch(digits)
+    setShowSuggestions(false)
+    const digits = searchQuery.replace(/\D/g, '')
+    if (digits.length === 11) {
+      await runSearch(digits)
+    } else if (suggestions.length === 1) {
+      handleSuggestionSelect(suggestions[0])
+    }
   }
 
   /* ── Register ───────────────────────────────────────────────────────────────── */
@@ -426,8 +489,6 @@ export default function ClientesPage() {
 
   /* ── Render ─────────────────────────────────────────────────────────────────── */
 
-  const digits = cpfInput.replace(/\D/g, '')
-
   return (
     <div className="p-4 sm:p-8 max-w-2xl mx-auto">
 
@@ -436,35 +497,72 @@ export default function ClientesPage() {
         <p className="text-sm text-slate-500 mt-0.5">Busque o cliente pelo CPF para iniciar o atendimento</p>
       </div>
 
-      {/* CPF search */}
+      {/* Search — nome ou CPF com autocomplete */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 mb-5">
-        <form onSubmit={handleSearch} className="flex gap-3">
-          <div className="relative flex-1">
-            <input
-              type="text" value={cpfInput}
-              onChange={e => { setCpfInput(fmtCpf(e.target.value)); if (mode !== 'idle') setMode('idle') }}
-              placeholder="000.000.000-00"
-              className="w-full pl-4 pr-9 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              maxLength={14} autoComplete="off"
-            />
-            {cpfInput && (
-              <button type="button" onClick={() => { setCpfInput(''); setMode('idle') }}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            )}
-          </div>
-          <button type="submit" disabled={mode === 'searching' || digits.length < 11}
-            className="flex items-center gap-2 px-4 py-2.5 bg-blue-700 text-white text-sm font-medium rounded-lg hover:bg-blue-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-            {mode === 'searching'
-              ? <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
-              : <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-            }
-            Buscar
-          </button>
-        </form>
+        <div ref={searchContainerRef} className="relative">
+          <form onSubmit={handleSearch} className="flex gap-3">
+            <div className="relative flex-1">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={handleSearchQueryChange}
+                onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                placeholder="Nome ou CPF do paciente"
+                className="w-full pl-4 pr-9 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                autoComplete="off"
+              />
+              {searchQuery && (
+                <button type="button" onClick={() => { setSearchQuery(''); setCpfInput(''); setSuggestions([]); setShowSuggestions(false); setMode('idle') }}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+            <button
+              type="submit"
+              disabled={mode === 'searching' || (searchQuery.replace(/\D/g, '').length !== 11 && suggestions.length !== 1 && suggestions.length === 0)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-blue-700 text-white text-sm font-medium rounded-lg hover:bg-blue-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              {mode === 'searching' || suggestLoading
+                ? <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" /></svg>
+                : <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+              }
+              Buscar
+            </button>
+          </form>
+
+          {/* Dropdown de sugestões */}
+          {showSuggestions && suggestions.length > 0 && (
+            <div className="absolute top-full left-0 right-[88px] mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-50 overflow-hidden">
+              {suggestions.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => handleSuggestionSelect(s)}
+                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50 transition-colors text-left border-b border-slate-100 last:border-0"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-slate-900">{s.nome}</p>
+                    <p className="text-xs text-slate-400 font-mono">{fmtCpfDisplay(s.cpf)}</p>
+                  </div>
+                  {s.dataNascimento && (
+                    <span className="text-xs text-slate-400 shrink-0 ml-3">
+                      {new Date(s.dataNascimento).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {showSuggestions && suggestions.length === 0 && searchQuery.length >= 2 && !suggestLoading && (
+            <div className="absolute top-full left-0 right-[88px] mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-50 px-4 py-3 text-sm text-slate-400">
+              Nenhum paciente encontrado
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── NOT FOUND ── */}

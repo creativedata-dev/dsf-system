@@ -154,6 +154,7 @@ model Tenant {
   tokensFiscal         TokenFiscal[]
   fracionamentos       FracionamentoLote[]
   fracoesItens         FracaoItem[]
+  diasFechados         DiaFechado[]
 }
 
 model User {
@@ -174,6 +175,7 @@ model User {
   auditLogs         AuditLog[]
   assinaturasPOP    AssinaturaPOP[]
   registrosTemp     RegistroTermoHigrometria[]
+  diasFechados      DiaFechado[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -432,6 +434,21 @@ model RegistroTermoHigrometria {
 
   @@unique([ambienteId, dataLeitura, periodo])
   @@index([tenantId, dataLeitura(sort: Desc)])
+}
+
+model DiaFechado {
+  id        String   @id @default(uuid())
+  tenantId  String
+  data      DateTime @db.Date
+  motivo    String?
+  usuarioId String
+  createdAt DateTime @default(now())
+
+  tenant  Tenant @relation(fields: [tenantId], references: [id])
+  usuario User   @relation(fields: [usuarioId], references: [id])
+
+  @@unique([tenantId, data])
+  @@index([tenantId])
 }
 
 // ─── Módulo 2.1 — POPs e E-learning ─────────────────────────────────────────
