@@ -88,7 +88,7 @@ export function DashboardShell({
           } />
 
           {permissions.includes('CLIENTE_BUSCAR') && hasModulo(modulosHabilitados, 'DSF') && (
-            <NavLink href="/dashboard/clientes" label="Emissão DSF" icon={
+            <NavLink href="/dashboard/clientes" label="DSF" icon={
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
@@ -96,7 +96,7 @@ export function DashboardShell({
           )}
 
           {hasModulo(modulosHabilitados, 'TEMPERATURA') && (
-            <NavLink href="/dashboard/temperatura" label="Controle de Ambientes" icon={
+            <NavLink href="/dashboard/temperatura" label="Ambiente" icon={
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M14 14.76V3.5a2.5 2.5 0 00-5 0v11.26a4.5 4.5 0 105 0z" />
               </svg>
@@ -104,7 +104,7 @@ export function DashboardShell({
           )}
 
           {hasModulo(modulosHabilitados, 'EQUIPAMENTOS') && (
-            <NavLink href="/dashboard/equipamentos" label="Calibração de Equipamentos" icon={
+            <NavLink href="/dashboard/equipamentos" label="Equipamentos" icon={
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437l1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008z" />
               </svg>
@@ -147,7 +147,7 @@ export function DashboardShell({
           )}
 
           {hasModulo(modulosHabilitados, 'POPS') && (
-            <NavLink href="/dashboard/pops" label="POPs e Treinamentos" icon={
+            <NavLink href="/dashboard/pops" label="POPs" icon={
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
               </svg>
