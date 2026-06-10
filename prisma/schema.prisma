@@ -155,6 +155,7 @@ model Tenant {
   fracionamentos       FracionamentoLote[]
   fracoesItens         FracaoItem[]
   diasFechados         DiaFechado[]
+  historicoCalibracoes HistoricoCalibracao[]
 }
 
 model User {
@@ -174,8 +175,9 @@ model User {
   dsfsComoAtendente DSF[]         @relation("Atendente")
   auditLogs         AuditLog[]
   assinaturasPOP    AssinaturaPOP[]
-  registrosTemp     RegistroTermoHigrometria[]
-  diasFechados      DiaFechado[]
+  registrosTemp        RegistroTermoHigrometria[]
+  diasFechados         DiaFechado[]
+  historicoCalibracoes HistoricoCalibracao[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -407,10 +409,33 @@ model Equipamento {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 
-  tenant Tenant @relation(fields: [tenantId], references: [id])
+  tenant    Tenant @relation(fields: [tenantId], references: [id])
+  historico HistoricoCalibracao[]
 
   @@index([tenantId])
   @@index([dataProximaCalibracao])
+}
+
+model HistoricoCalibracao {
+  id               String   @id @default(uuid())
+  tenantId         String
+  equipamentoId    String
+  usuarioId        String
+  dataCalib        DateTime @db.Date
+  dataProxima      DateTime @db.Date
+  numeroCertificado String?
+  laboratorio      String?
+  laudoFileId      String?
+  laudoUrl         String?
+  obs              String?
+  createdAt        DateTime @default(now())
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id])
+  equipamento Equipamento @relation(fields: [equipamentoId], references: [id])
+  usuario     User        @relation(fields: [usuarioId], references: [id])
+
+  @@index([tenantId])
+  @@index([equipamentoId])
 }
 
 model RegistroTermoHigrometria {
