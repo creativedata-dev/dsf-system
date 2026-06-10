@@ -277,8 +277,8 @@ export default function TemperaturaPage() {
       {/* Cabeçalho */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-slate-900">Controle de Ambientes</h1>
-          <p className="text-xs text-slate-400 mt-0.5">Temperatura e Umidade</p>
+          <h1 className="text-xl font-bold text-slate-900">Ambiente</h1>
+          <p className="text-xs text-slate-400 mt-0.5">Registre as leituras diárias de cada ambiente monitorado — manhã e tarde</p>
         </div>
         <div className="flex gap-2">
           <a href="/dashboard/temperatura/ambientes" className="text-xs px-3 py-1.5 border border-slate-200 rounded-lg text-slate-600 hover:bg-slate-50 transition">

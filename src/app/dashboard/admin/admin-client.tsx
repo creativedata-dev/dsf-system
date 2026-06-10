@@ -222,8 +222,8 @@ export function AdminClient({ currentUserId, isSuperAdmin }: { currentUserId: st
     <div className="p-4 sm:p-8">
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-slate-900">Gestão de Usuários</h1>
-          <p className="text-sm text-slate-500 mt-0.5">{isSuperAdmin ? 'Todos os usuários da plataforma' : 'Usuários do tenant com suas permissões'}</p>
+          <h1 className="text-xl font-bold text-slate-900">Usuários</h1>
+          <p className="text-sm text-slate-500 mt-0.5">{isSuperAdmin ? 'Todos os usuários da plataforma' : 'Gerencie os acessos da equipe — defina permissões individuais para cada função'}</p>
         </div>
         <button
           onClick={openCreate}

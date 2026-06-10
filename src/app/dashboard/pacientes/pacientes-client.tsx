@@ -193,7 +193,7 @@ export function PacientesClient({ isSuperAdmin }: { isSuperAdmin: boolean }) {
       <div className="mb-6">
         <h1 className="text-xl font-bold text-slate-900">Pacientes</h1>
         <p className="text-sm text-slate-500 mt-0.5">
-          {total > 0 ? `${total} paciente${total !== 1 ? 's' : ''} encontrado${total !== 1 ? 's' : ''}` : 'Listagem de pacientes cadastrados'}
+          {total > 0 ? `${total} paciente${total !== 1 ? 's' : ''} encontrado${total !== 1 ? 's' : ''}` : 'Cadastro de pacientes do estabelecimento — dados protegidos pela LGPD'}
         </p>
       </div>
 

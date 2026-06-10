@@ -162,9 +162,9 @@ export default function FracionamentoPage() {
       {/* Cabeçalho */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-slate-800">✂️ Fracionamento</h1>
+          <h1 className="text-xl font-bold text-slate-800">Fracionamento</h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            Rastreabilidade de fracionamento de medicamentos com etiquetas QR Code
+            Registre fracionamentos de lotes e imprima etiquetas com QR Code para cada fração
           </p>
         </div>
         {podeCriar && (

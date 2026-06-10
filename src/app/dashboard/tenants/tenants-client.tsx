@@ -501,9 +501,9 @@ export function TenantsClient() {
     <div className="p-4 sm:p-8">
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-slate-900">Painel Global SaaS</h1>
+          <h1 className="text-xl font-bold text-slate-900">Estabelecimentos</h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            {tenants.length} estabelecimento{tenants.length !== 1 ? 's' : ''} — {ativos} ativo{ativos !== 1 ? 's' : ''}
+            {tenants.length} estabelecimento{tenants.length !== 1 ? 's' : ''} — {ativos} ativo{ativos !== 1 ? 's' : ''} — gerencie módulos, assinaturas e integrações
           </p>
         </div>
         <button onClick={() => { setCreateForm(BLANK_TENANT_FORM); setCreateError(''); setShowCreate(true) }}

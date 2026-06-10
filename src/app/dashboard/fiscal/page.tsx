@@ -93,8 +93,8 @@ export default function FiscalPage() {
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Painel do Fiscal</h1>
-        <p className="text-gray-500 text-sm mt-1">Gere links de acesso temporário para fiscais da ANVISA/Vigilância Sanitária</p>
+        <h1 className="text-2xl font-bold text-gray-900">ANVISA — Painel do Fiscal</h1>
+        <p className="text-gray-500 text-sm mt-1">Resumo de conformidade pronto para vistoria — exporte o pacote completo em PDF</p>
       </div>
 
       {/* Gerador de link */}

@@ -300,7 +300,7 @@ export function AnvisaClient({ canCancel, canUpload }: { canCancel: boolean; can
       <div className="mb-6">
         <h1 className="text-xl font-bold text-slate-900">Histórico e Fiscalização ANVISA</h1>
         <p className="text-sm text-slate-500 mt-0.5">
-          Declarações emitidas pelo tenant — RDC 44/2009
+          Consulte, reimprima ou anexe cupons assinados de qualquer DSF emitida
         </p>
       </div>
 

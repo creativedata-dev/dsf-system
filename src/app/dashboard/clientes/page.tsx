@@ -493,8 +493,8 @@ export default function ClientesPage() {
     <div className="p-4 sm:p-8 max-w-2xl mx-auto">
 
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-slate-900">Emissão DSF</h1>
-        <p className="text-sm text-slate-500 mt-0.5">Busque o cliente pelo CPF para iniciar o atendimento</p>
+        <h1 className="text-xl font-bold text-slate-900">DSF</h1>
+        <p className="text-sm text-slate-500 mt-0.5">Busque o paciente pelo CPF ou nome para emitir uma Declaração de Serviço Farmacêutico</p>
       </div>
 
       {/* Search — nome ou CPF com autocomplete */}

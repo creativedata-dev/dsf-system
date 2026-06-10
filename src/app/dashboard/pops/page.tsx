@@ -233,7 +233,9 @@ export default function PopsPage() {
         <div className="mb-5">
           <h1 className="text-xl font-bold text-slate-900">POPs e Treinamentos</h1>
           <p className="text-sm text-slate-500 mt-0.5">
-            Leia cada POP e conclua o quiz para registrar sua ciência.
+            {isGestor && abaLista === 'equipe'
+              ? 'Acompanhe o status de treinamento de cada funcionário nos POPs obrigatórios'
+              : 'Leia os procedimentos operacionais e registre seu treinamento com validade legal'}
           </p>
         </div>
 

@@ -290,6 +290,7 @@ src/
       auth/[...nextauth]/   NextAuth handler
       clients/              Busca, cadastro e edicao de pacientes
       dsf/                  Emissao, upload, listagem, cancelamento
+        [id]/               GET retorna dados completos para reimpressao
       admin/
         planos/             CRUD de planos de assinatura
         assinaturas/        Gestao de assinaturas por tenant

@@ -206,8 +206,8 @@ export default function ValidadePage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <div>
-          <h1 className="text-xl font-bold text-slate-900">Controle de Validade</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Lotes por validade, quarentena e descarte</p>
+          <h1 className="text-xl font-bold text-slate-900">Validade</h1>
+          <p className="text-sm text-slate-500 mt-0.5">Monitore lotes próximos ao vencimento e registre quarentenas e descartes com rastreabilidade</p>
         </div>
         {canEdit && (
           <button

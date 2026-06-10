@@ -62,7 +62,7 @@ export default function ConfiguracoesPage() {
     <div className="p-4 sm:p-8 max-w-2xl mx-auto">
       <div className="mb-6">
         <h1 className="text-xl font-bold text-slate-900">Configurações</h1>
-        <p className="text-sm text-slate-500 mt-0.5">Gerencie as integrações da sua farmácia</p>
+        <p className="text-sm text-slate-500 mt-0.5">Conecte o Google Drive para arquivamento automático das DSFs assinadas</p>
       </div>
 
       {/* Banner de resultado OAuth */}

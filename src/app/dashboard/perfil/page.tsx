@@ -120,6 +120,7 @@ export default function PerfilPage() {
         <div>
           <h1 className="text-xl font-semibold text-slate-800">{perfil.nome}</h1>
           <p className="text-sm text-slate-500">{perfil.email}</p>
+          <p className="text-xs text-slate-400 mt-0.5">Atualize seus dados e a senha de acesso</p>
           <div className="flex flex-wrap gap-1 mt-1">
             {perfil.permissions.map(p => (
               <span key={p} className="px-2 py-0.5 text-xs font-medium bg-indigo-50 text-indigo-700 rounded-full border border-indigo-100">

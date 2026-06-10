@@ -245,7 +245,7 @@ export default function ConfiguracoesPoPs() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-xl font-bold text-slate-900">Gestão de POPs</h1>
-            <p className="text-sm text-slate-500 mt-0.5">Edite, habilite ou crie procedimentos e acompanhe treinamentos.</p>
+            <p className="text-sm text-slate-500 mt-0.5">Crie e edite os procedimentos da sua farmácia — habilite, desabilite ou customize o conteúdo e o quiz</p>
           </div>
           <button
             onClick={abrirNovo}

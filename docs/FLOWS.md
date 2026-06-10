@@ -59,7 +59,30 @@ reg_saving    saving  viewing                  │
 
 ---
 
-## 2. Fluxo de Busca e Atendimento
+## 2. Reimpressao e Reenvio de Foto (Historico ANVISA)
+
+```
+/dashboard/anvisa — linha de qualquer DSF nao cancelada
+
+[Imprimir]
+  GET /api/dsf/{id}
+    → Modal com layout completo (A4 ou bobina 80mm, conforme Tenant.tipoImpressao)
+    → Botao "Imprimir A4" / "Imprimir Cupom" → window.print()
+    → CSS @media print exibe apenas .dsf-doc ou .thermal-receipt
+
+[Foto] (requer DSF_EMITIR)
+  → Modal drag-and-drop / selecao de arquivo (JPG, PNG, PDF)
+  → Preview do arquivo selecionado
+  → [Enviar] POST /api/dsf/upload-signed
+      ├─ DSF EMITIDA  → status CONCLUIDA + driveFileId atualizado
+      ├─ DSF CONCLUIDA → apenas driveFileId atualizado (reenvio)
+      └─ DSF CANCELADA → bloqueado (409)
+  → Banner de sucesso + lista recarregada
+```
+
+---
+
+## 4. Fluxo de Busca e Atendimento
 
 ```
 Atendente digita CPF → GET /api/clients/search?cpf={digits}
@@ -76,7 +99,7 @@ O widget `CpfSearch` no home redireciona para `/dashboard/clientes?cpf={digits}`
 
 ---
 
-## 3. Fluxo de Emissao de DSF
+## 5. Fluxo de Emissao de DSF
 
 ### Etapa 1 — Emissao
 
@@ -123,7 +146,7 @@ Upload-signed: imagem → PDF (pdf-lib) → Drive → DSF.status = CONCLUIDA.
 
 ---
 
-## 4. Fluxo de Procedimentos por Tenant
+## 6. Fluxo de Procedimentos por Tenant
 
 ```
 Admin → /dashboard/admin/procedimentos
@@ -143,7 +166,7 @@ Se nenhuma config salva: todos os 11 servicos aparecem por padrao.
 
 ---
 
-## 5. Fluxo de Assinaturas (Super Admin)
+## 7. Fluxo de Assinaturas (Super Admin)
 
 ### Criar assinatura manualmente
 
@@ -211,7 +234,7 @@ dashboard/layout.tsx (Server Component):
 
 ---
 
-## 6. Fluxo de Configuracao de Gateway
+## 8. Fluxo de Configuracao de Gateway
 
 ```
 /dashboard/gateways → cartoes Stripe / Asaas / MercadoPago
@@ -239,7 +262,7 @@ POST /api/webhooks/stripe
 
 ---
 
-## 7. Fluxo Google Drive
+## 9. Fluxo Google Drive
 
 ```
 /dashboard/configuracoes → [Conectar]
@@ -255,7 +278,7 @@ POST /api/webhooks/stripe
 
 ---
 
-## 8. Fluxo de Autenticacao
+## 10. Fluxo de Autenticacao
 
 ```
 /dashboard/** sem sessao → proxy.ts → redirect /auth/login
@@ -275,7 +298,7 @@ JWT (renovado a cada getServerSession):
 
 ---
 
-## 9. Fluxo de POPs e Treinamentos
+## 11. Fluxo de POPs e Treinamentos
 
 ### Maquina de estados — modulo POPS (`/dashboard/pops`)
 
@@ -328,7 +351,7 @@ lista (todos os POPs do tenant)
 
 ---
 
-## 10. Fluxo de Perfil do Usuario
+## 12. Fluxo de Perfil do Usuario
 
 ```
 /dashboard/perfil
@@ -351,7 +374,7 @@ lista (todos os POPs do tenant)
 
 ---
 
-## 11. Sidebar por Perfil
+## 13. Sidebar por Perfil
 
 ### Secao Principal
 | Item (label) | Permissao / Modulo |
@@ -386,7 +409,7 @@ Rota: `/dashboard/perfil` — edita nome, CRF e senha.
 
 ---
 
-## 12. Cron Jobs
+## 14. Cron Jobs
 
 ### Limpeza de DSFs (03:00 UTC)
 
@@ -414,7 +437,7 @@ Authorization: Bearer {CRON_SECRET}
 
 ---
 
-## 11. Restricao Critica — NeonHttp
+## 15. Restricao Critica — NeonHttp
 
 O adaptador `PrismaNeonHttp` nao suporta transacoes interativas.
 

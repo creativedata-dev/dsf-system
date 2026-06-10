@@ -245,8 +245,8 @@ export default function EquipamentosPage() {
     <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-bold text-slate-900">Equipamentos e Calibração</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Controle de calibrações e laudos</p>
+          <h1 className="text-xl font-bold text-slate-900">Equipamentos</h1>
+          <p className="text-sm text-slate-500 mt-0.5">Acompanhe os laudos de calibração e receba alertas antes do vencimento</p>
         </div>
         {!isFormMode && (
           <button onClick={abrirNovo}

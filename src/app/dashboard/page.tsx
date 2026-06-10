@@ -84,8 +84,8 @@ export default async function DashboardPage() {
   return (
     <div className="p-4 sm:p-8">
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-slate-900">Painel Administrativo</h1>
-        <p className="text-sm text-slate-500 capitalize">{today}</p>
+        <h1 className="text-xl font-bold text-slate-900">Início</h1>
+        <p className="text-sm text-slate-500 capitalize">{today} — visão geral da sua conformidade</p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">

@@ -70,7 +70,7 @@ export default function ProcedimentosPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Procedimentos</h1>
           <p className="text-sm text-slate-500 mt-1">
-            Habilite os serviços que sua farmácia realiza e configure textos de orientação para impressão.
+            Ative ou desative tipos de serviço e personalize os textos de orientação impressos na DSF
           </p>
         </div>
         <button

@@ -49,14 +49,23 @@ Emite uma nova DSF (status `EMITIDA`).
 **Retorna:** payload completo para impressao, incluindo `textoOrientacao` do procedimento configurado
 
 ### `POST /api/dsf/upload-signed`
-Recebe foto/PDF do cupom assinado, converte para PDF, faz upload no Drive, atualiza status para `CONCLUIDA`.
+Recebe foto/PDF do cupom assinado, converte para PDF, faz upload no Drive.
 **Permissao:** `DSF_EMITIR`
 **Body:** `dsfId`, `fileBase64` (data URL de imagem ou PDF)
+**Comportamento por status:**
+- `EMITIDA` → atualiza status para `CONCLUIDA` + salva `driveFileId`
+- `CONCLUIDA` → atualiza apenas `driveFileId` (reenvio; status nao muda)
+- `CANCELADA` → `409` bloqueado
 
 ### `GET /api/dsf/list`
 Lista DSFs paginadas com filtros.
 **Permissao:** `ANVISA_RELATORIOS`
 **Query:** `page?`, `status?`, `tipoServico?`, `dataInicio?`, `dataFim?`, `format=csv`
+
+### `GET /api/dsf/{id}`
+Retorna dados completos de uma DSF para reimpressao.
+**Permissao:** qualquer usuario autenticado (escopo do tenant)
+**Retorna:** todos os campos de `ReceiptDsf` — dados da drogaria, RT, paciente, insumos, `textoOrientacao` do procedimento configurado, `tipoImpressao`
 
 ### `POST /api/dsf/cancel`
 Cancela uma DSF.
