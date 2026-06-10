@@ -89,7 +89,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     },
   })
 
-  return new NextResponse(pdfBytes, {
+  return new NextResponse(Buffer.from(pdfBytes), {
     headers: {
       'Content-Type': 'application/pdf',
       'Content-Disposition': `inline; filename="etiquetas-${fracionamento.id.slice(0, 8)}.pdf"`,
