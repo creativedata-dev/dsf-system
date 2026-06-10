@@ -114,39 +114,55 @@ export async function POST(req: NextRequest) {
   const ip = req.headers.get('x-forwarded-for') ?? req.headers.get('x-real-ip') ?? 'unknown'
   const userAgent = req.headers.get('user-agent') ?? 'unknown'
 
-  const fracionamento = await prisma.fracionamentoLote.create({
-    data: {
-      tenantId,
-      loteId,
-      usuarioId: userId,
-      quantidadeFracionada,
-      unidadeOrigem: lote.unidade,
-      totalFracoes: fracoes.length,
-      obs: obs || null,
-      fracoes: {
-        create: fracoes.map((fr: { quantidade: number; unidade: string; destinacao?: string }, idx: number) => ({
-          tenantId,
-          numero: idx + 1,
-          quantidade: fr.quantidade,
-          unidade: fr.unidade,
-          destinacao: fr.destinacao || null,
-        })),
+  try {
+    // NeonHttp não suporta transações — criar fracionamento e frações separadamente
+    const fracionamento = await prisma.fracionamentoLote.create({
+      data: {
+        tenantId,
+        loteId,
+        usuarioId: userId,
+        quantidadeFracionada,
+        unidadeOrigem: lote.unidade,
+        totalFracoes: fracoes.length,
+        obs: obs || null,
       },
-    },
-    include: { fracoes: { orderBy: { numero: 'asc' } } },
-  })
+    })
 
-  await prisma.auditLog.create({
-    data: {
-      tenantId,
-      userId,
-      acao: 'FRACAO_CRIADA',
-      recursoTipo: 'FracionamentoLote',
-      recursoId: fracionamento.id,
-      ip,
-      userAgent,
-    },
-  })
+    await Promise.all(
+      fracoes.map((fr: { quantidade: number; unidade: string; destinacao?: string }, idx: number) =>
+        prisma.fracaoItem.create({
+          data: {
+            fracionamentoId: fracionamento.id,
+            tenantId,
+            numero: idx + 1,
+            quantidade: fr.quantidade,
+            unidade: fr.unidade,
+            destinacao: fr.destinacao || null,
+          },
+        })
+      )
+    )
 
-  return NextResponse.json(fracionamento, { status: 201 })
+    const fracoesSalvas = await prisma.fracaoItem.findMany({
+      where: { fracionamentoId: fracionamento.id },
+      orderBy: { numero: 'asc' },
+    })
+
+    await prisma.auditLog.create({
+      data: {
+        tenantId,
+        userId,
+        acao: 'FRACAO_CRIADA',
+        recursoTipo: 'FracionamentoLote',
+        recursoId: fracionamento.id,
+        ip,
+        userAgent,
+      },
+    })
+
+    return NextResponse.json({ ...fracionamento, fracoes: fracoesSalvas }, { status: 201 })
+  } catch (e) {
+    console.error('POST /api/fracionamento error:', e)
+    return NextResponse.json({ error: String(e) }, { status: 500 })
+  }
 }

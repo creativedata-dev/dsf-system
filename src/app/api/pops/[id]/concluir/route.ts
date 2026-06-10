@@ -22,9 +22,9 @@ export async function POST(
     return NextResponse.json({ error: 'Respostas inválidas' }, { status: 400 })
   }
 
-  // Verifica se usuário já concluiu (aprovado = true)
+  // Verifica se usuário já concluiu com termo aceito
   const jaAprovado = await prisma.assinaturaPOP.findFirst({
-    where: { documentoId: id, usuarioId: userId, tenantId, aprovado: true },
+    where: { documentoId: id, usuarioId: userId, tenantId, aprovado: true, termoAceito: true },
     select: { id: true },
   })
 
@@ -63,7 +63,7 @@ export async function POST(
   const ip = req.headers.get('x-forwarded-for') ?? req.headers.get('x-real-ip') ?? 'unknown'
   const userAgent = req.headers.get('user-agent') ?? 'unknown'
 
-  // Registra tentativa (sempre); se aprovado, cria AssinaturaPOP definitiva
+  // Registra tentativa — termoAceito sempre false aqui; o termo é aceito em endpoint separado
   await prisma.assinaturaPOP.create({
     data: {
       documentoId: id,
@@ -75,21 +75,15 @@ export async function POST(
       respostas,
       ipOrigem: ip,
       userAgent,
+      termoAceito: false,
     },
   })
 
-  // Audit log
-  await prisma.auditLog.create({
-    data: {
-      tenantId,
-      userId,
-      acao: aprovado ? 'POP_CONCLUIDO' : 'POP_REPROVADO',
-      recursoTipo: 'DocumentoPOP',
-      recursoId: id,
-      ip,
-      userAgent,
-    },
-  })
+  if (!aprovado) {
+    await prisma.auditLog.create({
+      data: { tenantId, userId, acao: 'POP_REPROVADO', recursoTipo: 'DocumentoPOP', recursoId: id, ip, userAgent },
+    })
+  }
 
   return NextResponse.json({
     aprovado,

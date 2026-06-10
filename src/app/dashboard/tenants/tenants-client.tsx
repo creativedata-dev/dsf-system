@@ -127,23 +127,33 @@ interface UserItem {
 /* ─── Permission constants ───────────────────────────────────────────────────── */
 
 const ALL_PERMISSIONS = [
-  { value: 'CLIENTE_BUSCAR',      label: 'Buscar Clientes' },
-  { value: 'CLIENTE_CADASTRAR',   label: 'Cadastrar Clientes' },
-  { value: 'DSF_EMITIR',         label: 'Emitir DSF' },
-  { value: 'DSF_CANCELAR',       label: 'Cancelar DSF' },
-  { value: 'ANVISA_RELATORIOS',   label: 'Relatórios ANVISA' },
-  { value: 'DRIVE_CONFIGURAR',    label: 'Configurar Drive' },
-  { value: 'SUPER_ADMIN_GLOBAIS', label: 'Super Admin' },
+  { value: 'CLIENTE_BUSCAR',           label: 'Buscar Clientes' },
+  { value: 'CLIENTE_CADASTRAR',        label: 'Cadastrar Clientes' },
+  { value: 'DSF_EMITIR',              label: 'Emitir DSF' },
+  { value: 'DSF_CANCELAR',            label: 'Cancelar DSF' },
+  { value: 'ANVISA_RELATORIOS',        label: 'Relatórios ANVISA' },
+  { value: 'DRIVE_CONFIGURAR',         label: 'Configurar Drive' },
+  { value: 'TEMPERATURA_GERENCIAR',    label: 'Gerenciar Temperatura' },
+  { value: 'EQUIPAMENTOS_GERENCIAR',   label: 'Gerenciar Equipamentos' },
+  { value: 'POPS_GERENCIAR',           label: 'Gerenciar POPs' },
+  { value: 'VALIDADE_GERENCIAR',       label: 'Gerenciar Validade' },
+  { value: 'FRACIONAMENTO_GERENCIAR',  label: 'Gerenciar Fracionamento' },
+  { value: 'SUPER_ADMIN_GLOBAIS',      label: 'Super Admin' },
 ]
 
 const PERM_COLORS: Record<string, string> = {
-  SUPER_ADMIN_GLOBAIS: 'bg-purple-100 text-purple-700',
-  ANVISA_RELATORIOS:   'bg-blue-100 text-blue-700',
-  DSF_CANCELAR:        'bg-red-100 text-red-700',
-  DSF_EMITIR:          'bg-green-100 text-green-700',
-  DRIVE_CONFIGURAR:    'bg-amber-100 text-amber-700',
-  CLIENTE_CADASTRAR:   'bg-indigo-100 text-indigo-700',
-  CLIENTE_BUSCAR:      'bg-slate-100 text-slate-600',
+  SUPER_ADMIN_GLOBAIS:       'bg-purple-100 text-purple-700',
+  ANVISA_RELATORIOS:         'bg-blue-100 text-blue-700',
+  DSF_CANCELAR:              'bg-red-100 text-red-700',
+  DSF_EMITIR:                'bg-green-100 text-green-700',
+  DRIVE_CONFIGURAR:          'bg-amber-100 text-amber-700',
+  CLIENTE_CADASTRAR:         'bg-indigo-100 text-indigo-700',
+  CLIENTE_BUSCAR:            'bg-slate-100 text-slate-600',
+  TEMPERATURA_GERENCIAR:     'bg-cyan-100 text-cyan-700',
+  EQUIPAMENTOS_GERENCIAR:    'bg-orange-100 text-orange-700',
+  POPS_GERENCIAR:            'bg-violet-100 text-violet-700',
+  VALIDADE_GERENCIAR:        'bg-teal-100 text-teal-700',
+  FRACIONAMENTO_GERENCIAR:   'bg-pink-100 text-pink-700',
 }
 
 const PERM_LABEL: Record<string, string> = Object.fromEntries(ALL_PERMISSIONS.map((p) => [p.value, p.label]))

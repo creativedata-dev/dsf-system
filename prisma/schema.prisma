@@ -525,6 +525,8 @@ model AssinaturaPOP {
   respostas     Json     // {questaoId: "a"}
   ipOrigem      String
   userAgent     String
+  termoAceito   Boolean  @default(false)
+  termoAceitoEm DateTime?
   createdAt     DateTime @default(now())
 
   documento DocumentoPOP @relation(fields: [documentoId], references: [id])
