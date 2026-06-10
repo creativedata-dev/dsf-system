@@ -11,6 +11,7 @@ export default async function AnvisaPage() {
   if (!perms.includes('ANVISA_RELATORIOS')) redirect('/dashboard')
 
   const canCancel = perms.includes('DSF_CANCELAR')
+  const canUpload = perms.includes('DSF_EMITIR')
 
-  return <AnvisaClient canCancel={canCancel} />
+  return <AnvisaClient canCancel={canCancel} canUpload={canUpload} />
 }

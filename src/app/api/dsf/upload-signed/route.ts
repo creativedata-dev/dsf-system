@@ -31,9 +31,11 @@ export async function POST(request: NextRequest) {
   if (!dsf || dsf.tenantId !== tenantId) {
     return Response.json({ error: 'DSF não encontrada' }, { status: 404 })
   }
-  if (dsf.status === DsfStatus.CONCLUIDA) {
-    return Response.json({ error: 'DSF já concluída' }, { status: 409 })
+  if (dsf.status === DsfStatus.CANCELADA) {
+    return Response.json({ error: 'DSF cancelada não pode receber arquivos' }, { status: 409 })
   }
+
+  const isResend = dsf.status === DsfStatus.CONCLUIDA
 
   let driveFileId: string | null = null
   let pdfWarning: string | null = null
@@ -87,7 +89,7 @@ export async function POST(request: NextRequest) {
   await prisma.dSF.update({
     where: { id: dsfId },
     data: {
-      status: DsfStatus.CONCLUIDA,
+      ...(!isResend ? { status: DsfStatus.CONCLUIDA } : {}),
       ...(driveFileId ? { driveFileId } : {}),
     },
   })

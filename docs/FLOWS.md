@@ -275,15 +275,98 @@ JWT (renovado a cada getServerSession):
 
 ---
 
-## 9. Sidebar por Perfil
+## 9. Fluxo de POPs e Treinamentos
+
+### Maquina de estados — modulo POPS (`/dashboard/pops`)
+
+```
+lista (grid de POPs)
+  │─ usuario comum: aba "Meu Treinamento" (padrao)
+  │─ gestor (POPS_GERENCIAR): aba "Equipe" (padrao)
+         │
+         ▼  [seleciona POP]
+       lendo (conteudo do POP por secoes)
+         │
+         ▼  [Iniciar Quiz]
+       quiz (questoes com radio, sem indicacao de correto/errado antes de enviar)
+         │
+         ▼  [Enviar Respostas]  POST /api/pops/{id}/concluir
+         │
+    ┌────┴────────────────────────┐
+    │ aprovado                    │ reprovado
+    ▼                             ▼
+  termo (texto legal              resultado_reprovado
+  + botao "Estou de acordo")      [Tentar Novamente] → quiz
+    │
+    ▼  POST /api/pops/{id}/aceitar-termo
+  resultado (POP concluido, mostra termoAceitoEm)
+    │
+    ▼  [Voltar]
+  lista
+```
+
+### Aba Equipe (gestor)
+
+```
+GET /api/admin/pops/equipe
+  → { usuarios, pops, concluidos: ["userId:popId", ...] }
+
+Renderiza:
+  - Barra de progresso geral (pops concluidos / total de usuarios x pops)
+  - Lista: Nome | barra individual | badge (Concluido / Parcial X/Y / Nao iniciou)
+```
+
+### Gestao de POPs (`/dashboard/configuracoes/pops`)
+
+```
+lista (todos os POPs do tenant)
+  │─ [habilitar/desabilitar] → PATCH /api/admin/pops/{id}
+  │─ [editar] → editor (codigo, versao, titulo, conteudo, questoes dinamicas)
+  │─ [usuarios] → tabela de status por usuario  GET /api/admin/pops/{id}/usuarios
+  │─ [novo] → formulario de criacao  POST /api/admin/pops
+```
+
+---
+
+## 10. Fluxo de Perfil do Usuario
+
+```
+/dashboard/perfil
+  GET /api/perfil → nome, email, CRF, permissoes, createdAt
+
+  Secao "Dados pessoais":
+    - nome (editavel)
+    - email (readonly)
+    - CRF (opcional, editavel)
+    [Salvar] → PATCH /api/perfil
+
+  Secao "Alterar senha":
+    - senha atual
+    - nova senha
+    - confirmar nova senha
+    [Alterar Senha] → POST /api/perfil/senha
+      ├─ 200 → banner verde
+      └─ 400 (senha atual errada) → banner vermelho
+```
+
+---
+
+## 11. Sidebar por Perfil
 
 ### Secao Principal
-| Item | Permissao |
+| Item (label) | Permissao / Modulo |
 |---|---|
 | Inicio | qualquer admin |
-| Emissao DSF | `CLIENTE_BUSCAR` |
-| Relatorio DSF | `ANVISA_RELATORIOS` |
+| DSF | `CLIENTE_BUSCAR` + modulo `DSF` |
+| ANVISA | `ANVISA_RELATORIOS` |
 | Clientes | qualquer admin |
+| Ambiente | modulo `TEMPERATURA` |
+| Equipamentos | modulo `EQUIPAMENTOS` |
+| Medicamentos (colapsavel) | modulo `VALIDADE` ou `FRACIONAMENTO` |
+| &nbsp;&nbsp;└ Validade | modulo `VALIDADE` |
+| &nbsp;&nbsp;└ Fracionamento | modulo `FRACIONAMENTO` |
+| POPs | modulo `POPS` |
+| Fiscal | modulo `PAINEL_FISCAL` |
 
 ### Secao Configuracao
 | Item | Permissao |
@@ -291,14 +374,19 @@ JWT (renovado a cada getServerSession):
 | Usuarios | qualquer admin |
 | Google Drive | `DRIVE_CONFIGURAR` |
 | Procedimentos | `DRIVE_CONFIGURAR` |
+| Gestao de POPs | `POPS_GERENCIAR` ou `SUPER_ADMIN_GLOBAIS` |
 | Dashboard SaaS | `SUPER_ADMIN_GLOBAIS` |
 | Pagamentos | `SUPER_ADMIN_GLOBAIS` |
 | Planos | `SUPER_ADMIN_GLOBAIS` |
 | Estabelecimentos | `SUPER_ADMIN_GLOBAIS` |
 
+### Perfil do Usuario
+Acessivel pelo avatar/nome no rodape da sidebar para qualquer usuario autenticado.  
+Rota: `/dashboard/perfil` — edita nome, CRF e senha.
+
 ---
 
-## 10. Cron Jobs
+## 12. Cron Jobs
 
 ### Limpeza de DSFs (03:00 UTC)
 

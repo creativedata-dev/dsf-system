@@ -356,10 +356,16 @@ Retorna detalhe completo do POP: conteudo, questoes (sem `respostaCorreta`), sta
 **Permissao:** qualquer usuario autenticado
 
 ### `POST /api/pops/{id}/concluir`
-Submete respostas do quiz, calcula acertos e registra `AssinaturaPOP` se aprovado.
+Submete respostas do quiz, calcula acertos e registra `AssinaturaPOP` com `aprovado=true` se atingiu `minAcertos`.
 **Body:** `{ respostas: { questaoId: "b", ... } }`
 **Retorna:** `{ aprovado, acertos, totalQuestoes, minAcertos, feedback: [{ questaoId, correto, respostaCorreta, justificativa }] }`
-**Regras:** retry imediato permitido; `AssinaturaPOP` criada apenas na primeira aprovacao; tentativas subsequentes retornam `jaConcluidoAntes: true`.
+**Regras:** retry imediato permitido; `AssinaturaPOP` criada apenas na primeira aprovacao (com `termoAceito: false`); `POP_CONCLUIDO` so e registrado apos aceite do termo; `POP_REPROVADO` registrado em caso de reprova.
+
+### `POST /api/pops/{id}/aceitar-termo`
+Registra aceite do termo de ciencia pelo usuario apos aprovacao no quiz.
+**Permissao:** usuario autenticado que tenha `AssinaturaPOP` com `aprovado=true` e `termoAceito=false` para o POP.
+**Retorna:** `{ termoAceitoEm }` — timestamp do aceite.
+**Efeito:** atualiza `termoAceito=true`, `termoAceitoEm=now()`, cria AuditLog `POP_CONCLUIDO`.
 
 ### `GET /api/admin/pops`
 Lista todos os POPs do tenant (globais + proprios) com contagem de usuarios que concluiram.
@@ -369,6 +375,26 @@ Lista todos os POPs do tenant (globais + proprios) com contagem de usuarios que 
 Cria POP customizado para o tenant (substitui global de mesmo codigo ou adiciona codigo novo).
 **Permissao:** `POPS_GERENCIAR`
 **Body:** `{ codigo, titulo, baseLegal?, objetivo?, conteudo, versao?, minAcertos?, questoes? }`
+
+### `GET /api/admin/pops/{id}`
+Retorna POP completo com questoes (incluindo `respostaCorreta` — visao gestora).
+**Permissao:** `POPS_GERENCIAR` ou `SUPER_ADMIN_GLOBAIS`
+
+### `PATCH /api/admin/pops/{id}`
+Atualiza POP: campos textuais + substituicao completa das questoes.
+**Permissao:** `POPS_GERENCIAR` ou `SUPER_ADMIN_GLOBAIS`
+**Nota NeonHttp:** questoes sao deletadas e recriadas via `Promise.all` (nao via `createMany` ou transacao).
+
+### `GET /api/admin/pops/{id}/usuarios`
+Lista todos os usuarios ativos do tenant com status de conclusao para um POP especifico.
+**Permissao:** `POPS_GERENCIAR` ou `SUPER_ADMIN_GLOBAIS`
+**Retorna:** `[{ id, nome, email, concluido, acertos?, concluidoEm? }]`
+**Filtro:** `AssinaturaPOP` com `aprovado=true` (independe de `termoAceito` para compatibilidade com registros anteriores).
+
+### `GET /api/admin/pops/equipe`
+Retorna todos os dados necessarios para a aba Equipe do gestor em uma unica chamada.
+**Permissao:** `POPS_GERENCIAR` ou `SUPER_ADMIN_GLOBAIS`
+**Retorna:** `{ usuarios: [...], pops: [...], concluidos: string[] }` onde `concluidos` e um array de chaves `"usuarioId:documentoId"` para todos os pares aprovados.
 
 ---
 
@@ -403,3 +429,47 @@ Registra descarte formal: muda status para DESCARTADO e cria `AutoDescarte` imut
 Autocomplete de produtos do catalogo do tenant. Ate 20 resultados, case-insensitive.
 **Permissao:** qualquer usuario autenticado
 **Retorna:** `[{ id, nome, fabricante, unidadePadrao }]`
+
+---
+
+## Rastreabilidade de Fracionamento
+
+### `GET /api/fracionamento`
+Lista fracionamentos do tenant (com fracoes e produto vinculado).
+**Permissao:** qualquer usuario autenticado (modulo FRACIONAMENTO habilitado)
+**Query:** `loteId?` — filtra por lote de origem
+
+### `POST /api/fracionamento`
+Registra novo evento de fracionamento.
+**Permissao:** `FRACIONAMENTO_GERENCIAR`
+**Body:** `{ loteId, quantidadeFracionada, fracoes: [{ quantidade, unidade, destinacao? }], obs? }`
+**Nota NeonHttp:** `FracaoItem` criados via `Promise.all` separado do `FracionamentoLote.create`.
+**Retorna:** `{ ...fracionamento, fracoes: [] }` — status `201`
+
+### `PATCH /api/fracionamento/{id}`
+Atualiza observacoes do fracionamento.
+**Permissao:** `FRACIONAMENTO_GERENCIAR`
+
+### `GET /api/fracionamento/{id}/etiqueta`
+Gera PDF de etiquetas 80x50mm com QR Code para todas as fracoes do evento.
+**Permissao:** `FRACIONAMENTO_GERENCIAR`
+**Retorna:** `application/pdf` — QR Code por fracao encoda produto, lote, validade, quantidade e numero da fracao.
+**Efeito:** registra `etiquetaImpressaEm` para fracoes sem timestamp, cria AuditLog `ETIQUETA_IMPRESSA`.
+
+---
+
+## Perfil do Usuario
+
+### `GET /api/perfil`
+Retorna dados do usuario autenticado.
+**Retorna:** `{ nome, email, crf, permissions, createdAt }`
+
+### `PATCH /api/perfil`
+Atualiza nome e/ou CRF do usuario autenticado.
+**Body:** `{ nome?, crf? }`
+
+### `POST /api/perfil/senha`
+Altera a senha do usuario autenticado.
+**Body:** `{ senhaAtual, novaSenha }`
+**Validacao:** `senhaAtual` comparada com `bcrypt.compare`; nova senha hasheada com `bcrypt.hash(novaSenha, 10)`.
+**Retorna:** `400` se senha atual incorreta.

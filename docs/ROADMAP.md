@@ -1,7 +1,7 @@
 # Roadmap de Produto — FarmaSign
 
 Baseado no Plano de Expansao RDC 44/2009.  
-Ultima atualizacao: 08/06/2026 — Modulos 1.1, 1.2, 2.1, 2.2, 3.1 e 3.2 entregues.
+Ultima atualizacao: 09/06/2026 — Modulos 1.1, 1.2, 2.1, 2.2, 3.1 e 3.2 entregues. Melhorias UX: perfil de usuario, POPs reestruturado, gestao de POPs para gestor, menu Medicamentos, labels sidenav atualizados.
 
 ---
 
@@ -24,7 +24,7 @@ Funcionalidades entregues e operacionais em `app.farmasign.com.br`:
 - [x] Sistema de modulos por tenant (gerenciador super admin + slug por feature)
 - [x] Controle de Temperatura e Umidade (Modulo 1.1)
 - [x] Gestao de Equipamentos e Calibracao (Modulo 1.2)
-- [x] POPs e E-learning hibrido com quiz (Modulo 2.1)
+- [x] POPs e E-learning hibrido com quiz — grid, barra de progresso, termo de ciencia, aba Equipe (Modulo 2.1)
 - [x] Controle de Validade e Quarentena (Modulo 3.1)
 - [x] Painel do Fiscal com link temporario publico (Modulo 2.2)
 - [x] Rastreabilidade de Fracionamento com etiquetas QR Code (Modulo 3.2)
@@ -162,9 +162,12 @@ A RDC exige que todos os funcionarios sejam treinados nos Procedimentos Operacio
 - E-learning hibrido: leitura de conteudo por secoes + quiz de 3 questoes (minimo 2/3 acertos)
 - Retry imediato sem cooldown — ciencia registrada apenas na primeira aprovacao
 - Registro imutavel: `AssinaturaPOP` com usuario, acertos, respostas, IP de origem e User-Agent
-- Visao gerencial: contagem de conclusoes por POP por tenant
 - Permissao `POPS_GERENCIAR` para gestao de POPs customizados
 - Seed idempotente: `npx tsx prisma/seed-pops.ts`
+- **Termo de ciencia:** apos aprovacao no quiz, usuario assina termo digital antes da conclusao definitiva (`termoAceito`, `termoAceitoEm` em `AssinaturaPOP`); AuditLog `POP_CONCLUIDO` so e criado apos aceite do termo
+- **Aba Equipe (gestor):** lista todos os funcionarios com nome, barra de progresso individual e status (Concluido / Parcial X/Y / Nao iniciou); aba padrao ao entrar no modulo para usuarios com `POPS_GERENCIAR`
+- **Grid com barra de progresso:** visao "Meu Treinamento" exibe POPs em grade com barra de progresso total (substituiu cards de contagem)
+- **Gestao de POPs (`/dashboard/configuracoes/pops`):** gestor pode criar novos POPs, editar codigo/versao/titulo/conteudo/questoes, habilitar/desabilitar e visualizar status por usuario; requer `POPS_GERENCIAR`
 
 ---
 

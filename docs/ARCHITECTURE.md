@@ -308,8 +308,14 @@ src/
       ambientes/            CRUD de ambientes monitorados
       temperatura/          Lancamento, historico, export PDF, upload foto
       equipamentos/         CRUD equipamentos, upload laudo/foto
-      pops/                 Leitura, quiz e conclusao de POPs
+      pops/                 Leitura, quiz, conclusao e aceite de termo de ciencia
+      pops/[id]/aceitar-termo/ Registra aceite do termo apos aprovacao (POP_CONCLUIDO)
       admin/pops/           Gestao de POPs customizados (POPS_GERENCIAR)
+      admin/pops/[id]/      GET retorna POP completo com questoes; PATCH atualiza (Promise.all de creates)
+      admin/pops/[id]/usuarios/ Status de conclusao por usuario por POP
+      admin/pops/equipe/    Todos usuarios + todos POPs + pares concluidos (aba Equipe)
+      perfil/               GET perfil; PATCH nome/CRF
+      perfil/senha/         POST troca de senha (bcrypt)
       validade/
         lotes/              CRUD de lotes, quarentena, descarte
         catalogo/           Autocomplete de produtos
@@ -331,6 +337,7 @@ src/
       clientes/             Balcao de atendimento (maquina de estados)
       anvisa/               Relatorio DSF — historico, filtros, CSV
       pacientes/            Listagem admin de clientes
+      perfil/               Perfil do usuario — nome, CRF, alterar senha
       admin/
         page.tsx            Gestao de usuarios (tenant admin)
         procedimentos/      Configurar procedimentos habilitados + textos
@@ -340,9 +347,10 @@ src/
       saas/                 Dashboard administrativo SaaS (metricas)
       assinatura-expirada/  Tela de bloqueio por assinatura expirada
       configuracoes/        Integracao Google Drive
+        pops/               Gestao de POPs customizados (POPS_GERENCIAR)
       temperatura/          Lancamentos + ambientes + historico + export PDF
       equipamentos/         Lista + CRUD + upload laudo/foto
-      pops/                 E-learning: lista → leitura → quiz → resultado
+      pops/                 POPs: Meu Treinamento (grid+progresso) | Equipe (gestor) → leitura → quiz → termo → resultado
       validade/             Lotes por validade: alertas / quarentena / descarte
       fracionamento/        Registro de fracionamentos e impressao de etiquetas QR Code
       fiscal/               Painel do Fiscal — resumo de conformidade
