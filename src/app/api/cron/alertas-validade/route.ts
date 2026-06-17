@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { sendPush } from '@/lib/web-push'
 
 export async function GET(req: NextRequest) {
   const secret = req.headers.get('authorization')?.replace('Bearer ', '')
@@ -10,25 +11,16 @@ export async function GET(req: NextRequest) {
   const hoje = new Date()
   hoje.setHours(0, 0, 0, 0)
 
-  const d30 = new Date(hoje)
-  d30.setDate(d30.getDate() + 30)
-
   const d90 = new Date(hoje)
   d90.setDate(d90.getDate() + 90)
 
-  // Busca todos os lotes ATIVOS com validade até 90 dias (inclui vencidos)
   const lotes = await prisma.loteProduto.findMany({
-    where: {
-      ativo: true,
-      status: 'ATIVO',
-      validade: { lte: d90 },
-    },
+    where: { ativo: true, status: 'ATIVO', validade: { lte: d90 } },
     include: { produto: { select: { nome: true } } },
   })
 
   let alertasRegistrados = 0
 
-  // Agrupa por tenant para gerar um único AuditLog por tenant com resumo
   const porTenant = new Map<string, { vencidos: number; d30: number; d90: number }>()
   for (const l of lotes) {
     const diffMs = l.validade.getTime() - hoje.getTime()
@@ -57,6 +49,50 @@ export async function GET(req: NextRequest) {
   )
 
   alertasRegistrados = porTenant.size
+
+  // Push para tenants com lotes vencendo/vencidos
+  if (porTenant.size > 0) {
+    const configs = await prisma.configAlerta.findMany({
+      where: { tenantId: { in: [...porTenant.keys()] }, alertaValidade: true },
+      select: { tenantId: true },
+    })
+
+    const tenantsAtivos = new Set(configs.map(c => c.tenantId))
+    const tenantsFiltrados = [...porTenant.keys()].filter(
+      tid => tenantsAtivos.has(tid) || !configs.find(c => c.tenantId === tid)
+    )
+
+    if (tenantsFiltrados.length > 0) {
+      const subs = await prisma.pushSubscription.findMany({
+        where: { tenantId: { in: tenantsFiltrados } },
+      })
+
+      const expiredEndpoints: string[] = []
+      await Promise.all(
+        subs.map(async sub => {
+          const counts = porTenant.get(sub.tenantId)!
+          const body = counts.vencidos > 0
+            ? `${counts.vencidos} lote(s) vencido(s) e ${counts.d30} vencendo em 30 dias.`
+            : `${counts.d30} lote(s) vencendo em 30 dias. Verifique o estoque.`
+          const result = await sendPush(sub, {
+            title: 'FarmaSign — Validade de Lotes',
+            body,
+            url: '/dashboard/validade',
+            tag: 'alerta-validade',
+          })
+          if (result.expired) expiredEndpoints.push(sub.endpoint)
+        })
+      )
+
+      if (expiredEndpoints.length > 0) {
+        await Promise.all(
+          expiredEndpoints.map(endpoint =>
+            prisma.pushSubscription.deleteMany({ where: { endpoint } })
+          )
+        )
+      }
+    }
+  }
 
   return NextResponse.json({
     ok: true,

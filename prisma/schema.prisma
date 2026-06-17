@@ -125,11 +125,11 @@ enum StatusPagamento {
 model Tenant {
   id              String   @id @default(uuid())
   nomeFantasia    String
-  razaoSocial     String
-  cnpj            String   @unique
-  endereco        String
-  telefone        String
-  alvaraSanitario String
+  razaoSocial     String?
+  cnpj            String?  @unique
+  endereco        String?
+  telefone        String?
+  alvaraSanitario String?
   logoUrl         String?
   tipoImpressao   TipoImpressao @default(BOBINA_80MM)
   ativo              Boolean  @default(true)
@@ -156,6 +156,8 @@ model Tenant {
   fracoesItens         FracaoItem[]
   diasFechados         DiaFechado[]
   historicoCalibracoes HistoricoCalibracao[]
+  pushSubscriptions    PushSubscription[]
+  configAlerta         ConfigAlerta?
 }
 
 model User {
@@ -178,6 +180,7 @@ model User {
   registrosTemp        RegistroTermoHigrometria[]
   diasFechados         DiaFechado[]
   historicoCalibracoes HistoricoCalibracao[]
+  pushSubscriptions    PushSubscription[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -671,4 +674,33 @@ model FracaoItem {
 
   @@index([tenantId])
   @@index([fracionamentoId])
+}
+
+model PushSubscription {
+  id        String   @id @default(uuid())
+  userId    String
+  tenantId  String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id])
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([userId])
+  @@index([tenantId])
+}
+
+model ConfigAlerta {
+  id               String   @id @default(uuid())
+  tenantId         String   @unique
+  horaLimiteTemp   String   @default("18:00")
+  diasAntecedEquip Int      @default(30)
+  alertaTemp       Boolean  @default(true)
+  alertaEquip      Boolean  @default(true)
+  alertaValidade   Boolean  @default(true)
+  updatedAt        DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
 }

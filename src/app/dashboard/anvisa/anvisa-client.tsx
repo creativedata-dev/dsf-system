@@ -906,7 +906,7 @@ export function AnvisaClient({ canCancel, canUpload }: { canCancel: boolean; can
                         body * { visibility: hidden; }
                         .dsf-doc, .dsf-doc * { visibility: visible; }
                         .dsf-doc {
-                          position: fixed; left: 0; top: 0;
+                          position: absolute; left: 0; top: 0;
                           width: 100%; padding: 15mm;
                           font-family: Arial, sans-serif; font-size: 11pt; line-height: 1.5;
                           color: #000; background: #fff;
@@ -921,7 +921,7 @@ export function AnvisaClient({ canCancel, canUpload }: { canCancel: boolean; can
                         body * { visibility: hidden; }
                         .thermal-receipt, .thermal-receipt * { visibility: visible; }
                         .thermal-receipt {
-                          position: fixed; left: 0; top: 0;
+                          position: absolute; left: 0; top: 0;
                           width: 72mm;
                           font-family: monospace; font-size: 9pt; line-height: 1.4;
                           color: #000; background: #fff;

@@ -4,6 +4,8 @@ import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { DashboardShell } from '@/components/dashboard-shell'
 
+export const dynamic = 'force-dynamic'
+
 const TOLERANCIA_DIAS = 3
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {

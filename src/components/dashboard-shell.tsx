@@ -1,11 +1,19 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useLayoutEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { NavLink } from '@/components/nav-link'
 import { LogoutButton } from '@/components/logout-button'
 import { hasModulo } from '@/lib/modulos'
+
+// Evita hydration mismatch: executa apenas no cliente
+const useClientPathname = () => {
+  const pathname = usePathname()
+  const [clientPathname, setClientPathname] = useState<string | null>(null)
+  useLayoutEffect(() => { setClientPathname(pathname) }, [pathname])
+  return clientPathname
+}
 
 interface DashboardShellProps {
   children: React.ReactNode
@@ -40,6 +48,8 @@ export function DashboardShell({
   const [configOpen, setConfigOpen] = useState(false)
   const [medOpen, setMedOpen] = useState(false)
   const pathname = usePathname()
+  // null no SSR → evita hydration mismatch no bottom nav
+  const clientPathname = useClientPathname()
 
   useEffect(() => { setOpen(false) }, [pathname])
 
@@ -52,6 +62,69 @@ export function DashboardShell({
     if (pathname.startsWith('/dashboard/validade') || pathname.startsWith('/dashboard/fracionamento')) setMedOpen(true)
   }, [pathname])
 
+  // ── Bottom nav items (mobile) ────────────────────────────────────────────────
+  // Início sempre presente + até 3 módulos principais + "Mais" sempre ao final
+
+  type MobileNavItem = { href: string; label: string; icon: React.ReactNode }
+
+  const mobileNavItems: MobileNavItem[] = []
+
+  if (permissions.includes('CLIENTE_BUSCAR') && hasModulo(modulosHabilitados, 'DSF')) {
+    mobileNavItems.push({
+      href: '/dashboard/clientes',
+      label: 'DSF',
+      icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+      ),
+    })
+  }
+
+  if (hasModulo(modulosHabilitados, 'TEMPERATURA')) {
+    mobileNavItems.push({
+      href: '/dashboard/temperatura',
+      label: 'Ambiente',
+      icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M14 14.76V3.5a2.5 2.5 0 00-5 0v11.26a4.5 4.5 0 105 0z" />
+        </svg>
+      ),
+    })
+  }
+
+  if (hasModulo(modulosHabilitados, 'EQUIPAMENTOS')) {
+    mobileNavItems.push({
+      href: '/dashboard/equipamentos',
+      label: 'Equip.',
+      icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437l1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008z" />
+        </svg>
+      ),
+    })
+  }
+
+  if (hasModulo(modulosHabilitados, 'POPS')) {
+    mobileNavItems.push({
+      href: '/dashboard/pops',
+      label: 'POPs',
+      icon: (
+        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+        </svg>
+      ),
+    })
+  }
+
+  // Exibe no máx 2 módulos na bottom nav (Início + 2 + Config + Mais = 5 tabs)
+  const bottomPrimary = mobileNavItems.slice(0, 2)
+
+  const configRoutes = ['/dashboard/perfil', '/dashboard/geral', '/dashboard/admin', '/dashboard/configuracoes', '/dashboard/anvisa', '/dashboard/pacientes', '/dashboard/admin/procedimentos', '/dashboard/saas', '/dashboard/tenants', '/dashboard/planos', '/dashboard/gateways']
+  // clientPathname é null no SSR → active=false → estrutura idêntica em server/client
+  const isConfigActive = !!(clientPathname && configRoutes.some(r => clientPathname.startsWith(r)))
+
+  // ── Conteúdo do sidebar (desktop + drawer mobile) ─────────────────────────
   const sidebarContent = (
     <div className="flex flex-col h-full">
       {/* Brand + Tenant */}
@@ -298,7 +371,7 @@ export function DashboardShell({
           {assinaturaStatus === 'TRIAL' && trialExpiraEm && (
             <>
               <p className="font-semibold">Período de teste</p>
-              <p>Expira em {new Date(trialExpiraEm).toLocaleDateString('pt-BR')}</p>
+              <p suppressHydrationWarning>Expira em {new Date(trialExpiraEm).toLocaleDateString('pt-BR')}</p>
             </>
           )}
           {assinaturaStatus === 'SUSPENSA' && (
@@ -337,7 +410,7 @@ export function DashboardShell({
           </div>
         </div>
         <LogoutButton />
-        <p className="text-[10px] text-slate-300 text-center">
+        <p className="text-[10px] text-slate-300 text-center" suppressHydrationWarning>
           © {new Date().getFullYear()} SynapseIQ
         </p>
       </div>
@@ -349,24 +422,37 @@ export function DashboardShell({
 
       {/* ── Mobile header ── */}
       <header className="sticky top-0 z-30 flex items-center gap-3 bg-white border-b border-slate-200 px-4 py-3 lg:hidden">
+        {/* Hamburger — abre drawer completo */}
         <button
           onClick={() => setOpen(true)}
-          className="p-1.5 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors"
+          className="p-2 -ml-1 rounded-xl text-slate-500 hover:bg-slate-100 active:bg-slate-200 transition-colors"
           aria-label="Abrir menu"
         >
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
           </svg>
         </button>
+
+        {/* Logo / marca */}
         <div className="flex items-center gap-2">
-          <div className="w-6 h-6 bg-blue-700 rounded flex items-center justify-center">
-            <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <div className="w-7 h-7 bg-blue-700 rounded-lg flex items-center justify-center">
+            <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
             </svg>
           </div>
           <span className="text-sm font-bold text-slate-900">FarmaSign</span>
         </div>
-        <span className="ml-auto text-xs text-slate-400 truncate max-w-[140px]">{tenantName}</span>
+
+        {/* Tenant name */}
+        <span className="ml-auto text-xs text-slate-400 truncate max-w-[120px]">{tenantName}</span>
+
+        {/* Atalho rápido: perfil do usuário */}
+        <Link
+          href="/dashboard/perfil"
+          className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0 active:bg-blue-200 transition-colors"
+        >
+          <span className="text-xs font-bold text-blue-700">{userName.charAt(0).toUpperCase()}</span>
+        </Link>
       </header>
 
       {/* ── Mobile drawer overlay ── */}
@@ -376,20 +462,29 @@ export function DashboardShell({
             className="absolute inset-0 bg-black/40 backdrop-blur-sm"
             onClick={() => setOpen(false)}
           />
-          <aside className="absolute left-0 top-0 h-full w-72 bg-white shadow-xl flex flex-col">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-              <span className="text-sm font-bold text-slate-900">Menu</span>
+          <aside className="absolute left-0 top-0 h-full w-[85vw] max-w-xs bg-white shadow-xl flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3.5 border-b border-slate-100 flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 bg-blue-700 rounded flex items-center justify-center">
+                  <svg className="w-3.5 h-3.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                  </svg>
+                </div>
+                <span className="text-sm font-bold text-slate-900">Menu</span>
+              </div>
               <button
                 onClick={() => setOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 transition-colors"
+                className="p-2 rounded-xl text-slate-400 hover:bg-slate-100 active:bg-slate-200 transition-colors"
                 aria-label="Fechar menu"
               >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-            {sidebarContent}
+            <div className="flex-1 overflow-y-auto overscroll-contain">
+              {sidebarContent}
+            </div>
           </aside>
         </div>
       )}
@@ -400,7 +495,7 @@ export function DashboardShell({
       </aside>
 
       {/* ── Main content ── */}
-      <main className="flex-1 lg:overflow-y-auto">
+      <main className="flex-1 lg:overflow-y-auto pb-16 lg:pb-0">
         {diasEmTolerancia != null && (
           <div className="bg-red-600 text-white px-4 py-3 flex items-center gap-3">
             <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -417,6 +512,85 @@ export function DashboardShell({
         )}
         {children}
       </main>
+
+      {/* ── Mobile bottom nav ── */}
+      <nav className="fixed bottom-0 left-0 right-0 z-20 bg-white border-t border-slate-200 lg:hidden safe-bottom">
+        <div className="flex items-stretch h-16">
+
+          {/* Início */}
+          <MobileTabItem
+            href="/dashboard"
+            label="Início"
+            active={clientPathname === '/dashboard'}
+            icon={
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+              </svg>
+            }
+          />
+
+          {/* Itens primários do tenant (até 3) */}
+          {bottomPrimary.map(item => (
+            <MobileTabItem
+              key={item.href}
+              href={item.href}
+              label={item.label}
+              active={!!clientPathname && clientPathname.startsWith(item.href)}
+              icon={item.icon}
+            />
+          ))}
+
+          {/* Configuração — atalho direto */}
+          <MobileTabItem
+            href="/dashboard/perfil"
+            label="Config."
+            active={isConfigActive}
+            icon={
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            }
+          />
+
+          {/* Mais — abre o drawer completo */}
+          <button
+            onClick={() => setOpen(true)}
+            className="flex-1 flex flex-col items-center justify-center gap-0.5 text-slate-400 active:bg-slate-50 transition-colors select-none"
+          >
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h7" />
+            </svg>
+            <span className="text-[10px] font-medium">Mais</span>
+          </button>
+        </div>
+      </nav>
     </div>
+  )
+}
+
+/* ── Mobile tab item ────────────────────────────────────────────────────────── */
+
+function MobileTabItem({
+  href,
+  label,
+  active,
+  icon,
+}: {
+  href: string
+  label: string
+  active: boolean
+  icon: React.ReactNode
+}) {
+  return (
+    <Link
+      href={href}
+      className={`flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors select-none active:bg-slate-50 ${
+        active ? 'text-blue-700' : 'text-slate-400'
+      }`}
+    >
+      <span className={active ? 'text-blue-700' : 'text-slate-400'}>{icon}</span>
+      <span className={`text-[10px] font-medium ${active ? 'text-blue-700' : 'text-slate-400'}`}>{label}</span>
+    </Link>
   )
 }

@@ -1241,7 +1241,7 @@ export default function ClientesPage() {
                 body * { visibility: hidden; }
                 .dsf-doc, .dsf-doc * { visibility: visible; }
                 .dsf-doc {
-                  position: fixed; left: 0; top: 0;
+                  position: absolute; left: 0; top: 0;
                   width: 100%; padding: 15mm;
                   font-family: Arial, sans-serif; font-size: 11pt; line-height: 1.5;
                   color: #000; background: #fff;
@@ -1256,7 +1256,7 @@ export default function ClientesPage() {
                 body * { visibility: hidden; }
                 .thermal-receipt, .thermal-receipt * { visibility: visible; }
                 .thermal-receipt {
-                  position: fixed; left: 0; top: 0;
+                  position: absolute; left: 0; top: 0;
                   width: 72mm; max-width: 72mm;
                   padding: 3mm; margin: 0;
                   font-family: 'Courier New', Courier, monospace;

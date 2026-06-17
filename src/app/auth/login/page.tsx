@@ -1,13 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { signIn, getSession } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
-
-const ADMIN_PERMS = ['SUPER_ADMIN_GLOBAIS', 'ANVISA_RELATORIOS', 'DSF_CANCELAR', 'DRIVE_CONFIGURAR']
+import { signIn } from 'next-auth/react'
 
 export default function LoginPage() {
-  const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -26,11 +22,8 @@ export default function LoginPage() {
         return
       }
 
-      const session = await getSession()
-      const perms: string[] = session?.user.permissions ?? []
-      const isAdmin = perms.some((p) => ADMIN_PERMS.includes(p))
-
-      router.push('/dashboard')
+      // Hard navigation para limpar o Router Cache e forçar SSR fresco com a nova sessão
+      window.location.href = '/dashboard'
     } catch {
       setError('Erro ao conectar com o servidor. Tente novamente.')
     } finally {

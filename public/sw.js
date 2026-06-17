@@ -52,3 +52,45 @@ self.addEventListener('fetch', (e) => {
     })
   )
 })
+
+// ── Web Push ──────────────────────────────────────────────────────────────────
+
+self.addEventListener('push', (e) => {
+  if (!e.data) return
+
+  let payload
+  try {
+    payload = e.data.json()
+  } catch {
+    payload = { title: 'FarmaSign', body: e.data.text() }
+  }
+
+  const { title = 'FarmaSign', body = '', url = '/dashboard', tag = 'farmasign' } = payload
+
+  e.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      icon: '/icon-192x192.png',
+      badge: '/icon-192x192.png',
+      tag,
+      data: { url },
+      requireInteraction: false,
+    })
+  )
+})
+
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close()
+  const url = e.notification.data?.url ?? '/dashboard'
+  e.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      const existing = list.find((c) => c.url.includes(self.location.origin))
+      if (existing) {
+        existing.focus()
+        existing.navigate(url)
+      } else {
+        clients.openWindow(url)
+      }
+    })
+  )
+})

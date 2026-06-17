@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
+import { PushNotificacoes } from '@/components/push-notificacoes'
 
 interface DriveStatus {
   connected: boolean
@@ -117,6 +118,8 @@ export default function ConfiguracoesPage() {
           )}
         </div>
       </section>
+
+      <PushNotificacoes />
     </div>
   )
 }

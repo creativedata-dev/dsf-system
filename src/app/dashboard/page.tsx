@@ -41,12 +41,16 @@ export default async function DashboardPage() {
   const todayStart = new Date()
   todayStart.setHours(0, 0, 0, 0)
 
-  const [dsfHoje, totalClientes, drive] = await Promise.all([
+  const [dsfHoje, totalClientes, drive, tenant] = await Promise.all([
     prisma.dSF.count({ where: { tenantId, createdAt: { gte: todayStart } } }),
     prisma.cliente.count({ where: { tenantId } }),
     prisma.driveCredential.findUnique({
       where: { tenantId },
       select: { id: true, driveEmail: true, accessToken: true, refreshToken: true },
+    }),
+    prisma.tenant.findUnique({
+      where: { id: tenantId },
+      select: { cnpj: true, endereco: true, razaoSocial: true, alvaraSanitario: true, telefone: true },
     }),
   ])
 
@@ -81,12 +85,74 @@ export default async function DashboardPage() {
     month: 'long',
   })
 
+  // Checklist de onboarding para tenants recém-criados via landing page
+  const passosConcluidos = {
+    dados: !!(tenant?.cnpj && tenant?.endereco && tenant?.razaoSocial && tenant?.alvaraSanitario),
+    drive: driveConectado,
+    primeiroCliente: totalClientes > 0,
+    primeiroDsf: dsfHoje > 0 || totalClientes > 0, // aproximação — se já tem clientes, já usou o sistema
+  }
+  const totalPassos = Object.keys(passosConcluidos).length
+  const passosFeitos = Object.values(passosConcluidos).filter(Boolean).length
+  const mostrarOnboarding = passosFeitos < totalPassos
+
   return (
     <div className="p-4 sm:p-8">
       <div className="mb-6">
         <h1 className="text-xl font-bold text-slate-900">Início</h1>
         <p className="text-sm text-slate-500 capitalize">{today} — visão geral da sua conformidade</p>
       </div>
+
+      {/* Welcome banner — aparece até completar todas as configurações */}
+      {mostrarOnboarding && (
+        <div className="mb-6 bg-blue-50 border border-blue-200 rounded-2xl p-5">
+          <div className="flex items-start gap-3 mb-4">
+            <div className="w-9 h-9 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5">
+              <svg className="w-5 h-5 text-blue-700" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div>
+              <h2 className="text-sm font-bold text-blue-900">Configure seu FarmaSign</h2>
+              <p className="text-xs text-blue-700 mt-0.5">
+                {passosFeitos} de {totalPassos} passos concluídos — siga o checklist para começar a usar todos os recursos.
+              </p>
+            </div>
+            <div className="ml-auto flex-shrink-0">
+              <div className="text-xs font-bold text-blue-700 bg-blue-100 rounded-lg px-2.5 py-1">
+                {Math.round((passosFeitos / totalPassos) * 100)}%
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2.5">
+            <OnboardingStep
+              done={passosConcluidos.dados}
+              href="/dashboard/geral"
+              label="Complete os dados da farmácia"
+              desc="Informe CNPJ, razão social, endereço e alvará sanitário para estar em conformidade com a ANVISA."
+            />
+            <OnboardingStep
+              done={passosConcluidos.drive}
+              href="/dashboard/configuracoes"
+              label="Conecte o Google Drive"
+              desc="As DSFs emitidas serão salvas automaticamente em nuvem. Necessário para backup e auditoria."
+            />
+            <OnboardingStep
+              done={passosConcluidos.primeiroCliente}
+              href="/dashboard/clientes"
+              label="Cadastre seu primeiro cliente"
+              desc="Registre um paciente para emitir a primeira Declaração de Serviço Farmacêutico."
+            />
+            <OnboardingStep
+              done={passosConcluidos.primeiroDsf}
+              href="/dashboard/clientes"
+              label="Emita sua primeira DSF"
+              desc="Registre um atendimento farmacêutico e mantenha conformidade com a RDC 44/2009."
+            />
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
         <MetricCard
@@ -129,6 +195,34 @@ export default async function DashboardPage() {
         <CpfSearch />
       </div>
     </div>
+  )
+}
+
+function OnboardingStep({ done, href, label, desc }: { done: boolean; href: string; label: string; desc: string }) {
+  return (
+    <a
+      href={done ? '#' : href}
+      className={`flex items-start gap-3 p-3 rounded-xl transition-colors ${done ? 'opacity-60 cursor-default' : 'bg-white hover:bg-blue-50 border border-blue-100'}`}
+    >
+      <div className={`w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 ${done ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-400'}`}>
+        {done ? (
+          <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+        ) : (
+          <div className="w-2 h-2 rounded-full bg-slate-300" />
+        )}
+      </div>
+      <div className="min-w-0">
+        <p className={`text-sm font-semibold ${done ? 'text-slate-400 line-through' : 'text-slate-800'}`}>{label}</p>
+        {!done && <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{desc}</p>}
+      </div>
+      {!done && (
+        <svg className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5 ml-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+        </svg>
+      )}
+    </a>
   )
 }
 
