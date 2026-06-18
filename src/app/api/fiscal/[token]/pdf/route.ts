@@ -24,9 +24,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ toke
 
   const input: Parameters<typeof generateFiscalPdf>[0] = {
     tenantNome: tenant.nomeFantasia,
-    tenantCnpj: tenant.cnpj,
-    tenantEndereco: tenant.endereco,
-    tenantAlvara: tenant.alvaraSanitario,
+    tenantCnpj: tenant.cnpj ?? undefined,
+    tenantEndereco: tenant.endereco ?? undefined,
+    tenantAlvara: tenant.alvaraSanitario ?? undefined,
     dataInicio: tk.dataInicio.toISOString().slice(0, 10),
     dataFim: tk.dataFim.toISOString().slice(0, 10),
     geradoEm: now,
