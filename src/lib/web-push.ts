@@ -1,10 +1,16 @@
 import webpush from 'web-push'
 
-webpush.setVapidDetails(
-  'mailto:suporte@farmasign.com.br',
-  process.env.VAPID_PUBLIC_KEY!,
-  process.env.VAPID_PRIVATE_KEY!,
-)
+let vapidConfigured = false
+function ensureVapid() {
+  if (vapidConfigured) return
+  if (!process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY) return
+  webpush.setVapidDetails(
+    'mailto:suporte@farmasign.com.br',
+    process.env.VAPID_PUBLIC_KEY,
+    process.env.VAPID_PRIVATE_KEY,
+  )
+  vapidConfigured = true
+}
 
 export interface PushPayload {
   title: string
@@ -17,6 +23,7 @@ export async function sendPush(
   subscription: { endpoint: string; p256dh: string; auth: string },
   payload: PushPayload,
 ): Promise<{ ok: boolean; expired?: boolean }> {
+  ensureVapid()
   try {
     await webpush.sendNotification(
       {
