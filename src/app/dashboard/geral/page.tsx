@@ -13,6 +13,10 @@ interface TenantGeral {
   logoUrl: string | null
 }
 
+const CAMPOS_OBRIGATORIOS: (keyof TenantGeral)[] = [
+  'nomeFantasia', 'razaoSocial', 'cnpj', 'endereco', 'telefone', 'alvaraSanitario',
+]
+
 function fmtCnpj(v: string) {
   return v.replace(/\D/g, '').replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5')
 }
@@ -42,11 +46,16 @@ function resizeLogo(file: File): Promise<string> {
   })
 }
 
+function campoVazio(v: string | null | undefined) {
+  return !v || v.trim() === ''
+}
+
 export default function GeralPage() {
   const [dados, setDados] = useState<TenantGeral | null>(null)
   const [form, setForm] = useState<Partial<TenantGeral>>({})
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<{ tipo: 'ok' | 'erro'; texto: string } | null>(null)
+  const [tentouSalvar, setTentouSalvar] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -70,7 +79,17 @@ export default function GeralPage() {
     }
   }
 
+  function erro(field: keyof TenantGeral) {
+    return tentouSalvar && CAMPOS_OBRIGATORIOS.includes(field) && campoVazio(form[field] as string)
+  }
+
   async function salvar() {
+    setTentouSalvar(true)
+    const faltando = CAMPOS_OBRIGATORIOS.some(f => campoVazio(form[f] as string))
+    if (faltando) {
+      setMsg({ tipo: 'erro', texto: 'Preencha todos os campos obrigatórios antes de salvar.' })
+      return
+    }
     setSaving(true)
     setMsg(null)
     try {
@@ -89,7 +108,16 @@ export default function GeralPage() {
     }
   }
 
+  const camposIncompletos = CAMPOS_OBRIGATORIOS.some(f => campoVazio(dados?.[f] as string))
+
   if (!dados) return <div className="p-6 text-gray-500">Carregando...</div>
+
+  const inputClass = (field: keyof TenantGeral) =>
+    `w-full rounded-lg border px-3 py-2 text-sm focus:outline-none focus:ring-2 ${
+      erro(field)
+        ? 'border-red-400 focus:ring-red-400 bg-red-50'
+        : 'border-gray-300 focus:ring-blue-500'
+    }`
 
   return (
     <div className="p-6 max-w-2xl mx-auto space-y-6">
@@ -97,6 +125,13 @@ export default function GeralPage() {
         <h1 className="text-2xl font-bold text-gray-900">Dados da Farmácia</h1>
         <p className="text-sm text-gray-500 mt-1">Informações do estabelecimento exibidas nos documentos e relatórios.</p>
       </div>
+
+      {camposIncompletos && (
+        <div className="rounded-lg px-4 py-3 text-sm bg-amber-50 text-amber-800 border border-amber-200 flex items-start gap-2">
+          <span className="mt-0.5">⚠️</span>
+          <span>Cadastro incompleto — a emissão de DSF requer todos os campos preenchidos.</span>
+        </div>
+      )}
 
       {msg && (
         <div className={`rounded-lg px-4 py-3 text-sm ${msg.tipo === 'ok' ? 'bg-green-50 text-green-800 border border-green-200' : 'bg-red-50 text-red-800 border border-red-200'}`}>
@@ -133,6 +168,9 @@ export default function GeralPage() {
                 </button>
               )}
               <p className="text-xs text-gray-400">PNG, JPG ou WebP — máx. 320×160px</p>
+              {!form.logoUrl && (
+                <p className="text-xs text-amber-600">Sem logo, o nome fantasia será exibido no lugar.</p>
+              )}
             </div>
           </div>
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleLogo} />
@@ -142,68 +180,74 @@ export default function GeralPage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="sm:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nome Fantasia *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Nome Fantasia <span className="text-red-500">*</span></label>
             <input
               type="text"
               value={form.nomeFantasia ?? ''}
               onChange={e => set('nomeFantasia', e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className={inputClass('nomeFantasia')}
             />
+            {erro('nomeFantasia') && <p className="text-xs text-red-500 mt-1">Campo obrigatório</p>}
           </div>
 
           <div className="sm:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Razão Social</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Razão Social <span className="text-red-500">*</span></label>
             <input
               type="text"
               value={form.razaoSocial ?? ''}
               onChange={e => set('razaoSocial', e.target.value)}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className={inputClass('razaoSocial')}
             />
+            {erro('razaoSocial') && <p className="text-xs text-red-500 mt-1">Campo obrigatório</p>}
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">CNPJ</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">CNPJ <span className="text-red-500">*</span></label>
             <input
               type="text"
               value={form.cnpj ? fmtCnpj(form.cnpj) : ''}
               onChange={e => set('cnpj', e.target.value.replace(/\D/g, ''))}
               placeholder="00.000.000/0000-00"
               maxLength={18}
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className={inputClass('cnpj')}
             />
+            {erro('cnpj') && <p className="text-xs text-red-500 mt-1">Campo obrigatório</p>}
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Telefone</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Telefone <span className="text-red-500">*</span></label>
             <input
               type="text"
               value={form.telefone ?? ''}
               onChange={e => set('telefone', e.target.value)}
               placeholder="(00) 00000-0000"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className={inputClass('telefone')}
             />
+            {erro('telefone') && <p className="text-xs text-red-500 mt-1">Campo obrigatório</p>}
           </div>
 
           <div className="sm:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Endereço</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Endereço <span className="text-red-500">*</span></label>
             <input
               type="text"
               value={form.endereco ?? ''}
               onChange={e => set('endereco', e.target.value)}
               placeholder="Rua, número, bairro, cidade — UF"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className={inputClass('endereco')}
             />
+            {erro('endereco') && <p className="text-xs text-red-500 mt-1">Campo obrigatório</p>}
           </div>
 
           <div className="sm:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Alvará Sanitário</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Alvará Sanitário <span className="text-red-500">*</span></label>
             <input
               type="text"
               value={form.alvaraSanitario ?? ''}
               onChange={e => set('alvaraSanitario', e.target.value)}
               placeholder="Número do alvará"
-              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className={inputClass('alvaraSanitario')}
             />
+            {erro('alvaraSanitario') && <p className="text-xs text-red-500 mt-1">Campo obrigatório</p>}
           </div>
 
           <div>
@@ -219,7 +263,7 @@ export default function GeralPage() {
           </div>
         </div>
 
-        <div className="pt-2">
+        <div className="pt-2 flex items-center gap-3">
           <button
             onClick={salvar}
             disabled={saving}
@@ -227,6 +271,7 @@ export default function GeralPage() {
           >
             {saving ? 'Salvando...' : 'Salvar alterações'}
           </button>
+          <span className="text-xs text-gray-400">Campos marcados com <span className="text-red-500">*</span> são obrigatórios para emissão de DSF</span>
         </div>
       </div>
     </div>
