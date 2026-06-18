@@ -2,6 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import bcrypt from 'bcryptjs'
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS_HEADERS })
+}
+
 // Rate-limit simples em memória: 1 tentativa por IP/minuto
 const rateMap = new Map<string, number>()
 
@@ -17,32 +27,36 @@ function checkRate(ip: string): boolean {
   return true
 }
 
+function json(body: unknown, status = 200) {
+  return NextResponse.json(body, { status, headers: CORS_HEADERS })
+}
+
 export async function POST(req: NextRequest) {
   const ip = getIp(req)
   if (!checkRate(ip)) {
-    return NextResponse.json({ error: 'Muitas tentativas. Aguarde 1 minuto.' }, { status: 429 })
+    return json({ error: 'Muitas tentativas. Aguarde 1 minuto.' }, 429)
   }
 
   let body: unknown
   try { body = await req.json() } catch {
-    return NextResponse.json({ error: 'JSON inválido.' }, { status: 400 })
+    return json({ error: 'JSON inválido.' }, 400)
   }
 
   const { nomeFantasia, responsavelNome, email, senha } = body as Record<string, string>
 
   // Validações básicas
   if (!nomeFantasia?.trim() || nomeFantasia.trim().length < 3) {
-    return NextResponse.json({ error: 'Nome da farmácia deve ter ao menos 3 caracteres.' }, { status: 422 })
+    return json({ error: 'Nome da farmácia deve ter ao menos 3 caracteres.' }, 422)
   }
   if (!responsavelNome?.trim() || responsavelNome.trim().length < 3) {
-    return NextResponse.json({ error: 'Nome do responsável deve ter ao menos 3 caracteres.' }, { status: 422 })
+    return json({ error: 'Nome do responsável deve ter ao menos 3 caracteres.' }, 422)
   }
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   if (!email?.trim() || !emailRegex.test(email.trim())) {
-    return NextResponse.json({ error: 'E-mail inválido.' }, { status: 422 })
+    return json({ error: 'E-mail inválido.' }, 422)
   }
   if (!senha || senha.length < 8) {
-    return NextResponse.json({ error: 'A senha deve ter ao menos 8 caracteres.' }, { status: 422 })
+    return json({ error: 'A senha deve ter ao menos 8 caracteres.' }, 422)
   }
 
   const emailNorm = email.trim().toLowerCase()
@@ -50,7 +64,7 @@ export async function POST(req: NextRequest) {
   // Verificar e-mail já cadastrado (email é único por tenant, mas verificamos globalmente)
   const emailExistente = await prisma.user.findFirst({ where: { email: emailNorm } })
   if (emailExistente) {
-    return NextResponse.json({ error: 'Este e-mail já está cadastrado. Faça login ou use outro endereço.' }, { status: 409 })
+    return json({ error: 'Este e-mail já está cadastrado. Faça login ou use outro endereço.' }, 409)
   }
 
   // Buscar plano TRIAL ativo
@@ -59,7 +73,7 @@ export async function POST(req: NextRequest) {
     orderBy: { createdAt: 'asc' },
   })
   if (!plano) {
-    return NextResponse.json({ error: 'Serviço temporariamente indisponível. Entre em contato com o suporte.' }, { status: 503 })
+    return json({ error: 'Serviço temporariamente indisponível. Entre em contato com o suporte.' }, 503)
   }
 
   const trialDias = plano.trialDias ?? 14
@@ -123,5 +137,5 @@ export async function POST(req: NextRequest) {
     },
   })
 
-  return NextResponse.json({ ok: true, email: emailNorm })
+  return json({ ok: true, email: emailNorm })
 }
