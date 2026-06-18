@@ -17,6 +17,7 @@ export async function GET() {
       telefone: true,
       alvaraSanitario: true,
       tipoImpressao: true,
+      logoUrl: true,
     },
   })
   if (!tenant) return NextResponse.json({ error: 'Tenant não encontrado' }, { status: 404 })
@@ -36,6 +37,7 @@ export async function PATCH(req: NextRequest) {
     telefone?: string
     alvaraSanitario?: string
     tipoImpressao?: string
+    logoUrl?: string | null
   }
   try { body = await req.json() } catch {
     return NextResponse.json({ error: 'JSON inválido' }, { status: 400 })
@@ -63,6 +65,7 @@ export async function PATCH(req: NextRequest) {
   if (body.tipoImpressao !== undefined && ['BOBINA_80MM', 'FOLHA_A4'].includes(body.tipoImpressao)) {
     data.tipoImpressao = body.tipoImpressao
   }
+  if (body.logoUrl !== undefined) data.logoUrl = body.logoUrl ?? null
 
   if (Object.keys(data).length === 0) {
     return NextResponse.json({ error: 'Nenhum campo para atualizar' }, { status: 400 })

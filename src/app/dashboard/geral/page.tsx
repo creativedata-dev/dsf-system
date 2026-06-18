@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 
 interface TenantGeral {
   nomeFantasia: string
@@ -10,10 +10,36 @@ interface TenantGeral {
   telefone: string | null
   alvaraSanitario: string | null
   tipoImpressao: string
+  logoUrl: string | null
 }
 
 function fmtCnpj(v: string) {
   return v.replace(/\D/g, '').replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5')
+}
+
+function resizeLogo(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const img = new Image()
+      img.onload = () => {
+        const MAX_W = 320, MAX_H = 160
+        let { width: w, height: h } = img
+        if (w > MAX_W || h > MAX_H) {
+          const ratio = Math.min(MAX_W / w, MAX_H / h)
+          w = Math.round(w * ratio); h = Math.round(h * ratio)
+        }
+        const canvas = document.createElement('canvas')
+        canvas.width = w; canvas.height = h
+        canvas.getContext('2d')!.drawImage(img, 0, 0, w, h)
+        resolve(canvas.toDataURL('image/webp', 0.85))
+      }
+      img.onerror = reject
+      img.src = e.target!.result as string
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
 }
 
 export default function GeralPage() {
@@ -21,6 +47,7 @@ export default function GeralPage() {
   const [form, setForm] = useState<Partial<TenantGeral>>({})
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<{ tipo: 'ok' | 'erro'; texto: string } | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     fetch('/api/geral')
@@ -28,8 +55,19 @@ export default function GeralPage() {
       .then((d: TenantGeral) => { setDados(d); setForm(d) })
   }, [])
 
-  function set(field: keyof TenantGeral, value: string) {
+  function set(field: keyof TenantGeral, value: string | null) {
     setForm(f => ({ ...f, [field]: value }))
+  }
+
+  async function handleLogo(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    try {
+      const dataUrl = await resizeLogo(file)
+      set('logoUrl', dataUrl)
+    } catch {
+      setMsg({ tipo: 'erro', texto: 'Erro ao processar a imagem.' })
+    }
   }
 
   async function salvar() {
@@ -67,6 +105,41 @@ export default function GeralPage() {
       )}
 
       <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+        {/* Logotipo */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Logotipo</label>
+          <div className="flex items-center gap-4">
+            <div className="w-32 h-16 rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden">
+              {form.logoUrl
+                ? <img src={form.logoUrl} alt="logo" className="w-full h-full object-contain" />
+                : <span className="text-xs text-gray-400">Sem logo</span>
+              }
+            </div>
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50"
+              >
+                {form.logoUrl ? 'Trocar logo' : 'Enviar logo'}
+              </button>
+              {form.logoUrl && (
+                <button
+                  type="button"
+                  onClick={() => set('logoUrl', null)}
+                  className="px-3 py-1.5 rounded-lg border border-red-200 text-sm text-red-600 hover:bg-red-50"
+                >
+                  Remover
+                </button>
+              )}
+              <p className="text-xs text-gray-400">PNG, JPG ou WebP — máx. 320×160px</p>
+            </div>
+          </div>
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleLogo} />
+        </div>
+
+        <div className="border-t border-gray-100" />
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="sm:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-1">Nome Fantasia *</label>
