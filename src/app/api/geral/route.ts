@@ -45,23 +45,28 @@ export async function PATCH(req: NextRequest) {
 
   const tenantId = session.user.tenantId
 
-  if (body.cnpj !== undefined) {
-    const cnpjClean = body.cnpj.replace(/\D/g, '')
-    if (cnpjClean.length !== 14) return NextResponse.json({ error: 'CNPJ inválido' }, { status: 400 })
-    const conflict = await prisma.tenant.findUnique({ where: { cnpj: cnpjClean }, select: { id: true } })
-    if (conflict && conflict.id !== tenantId) {
-      return NextResponse.json({ error: 'CNPJ já cadastrado em outro estabelecimento' }, { status: 409 })
+  if (body.cnpj !== undefined && body.cnpj !== null) {
+    const cnpjClean = (body.cnpj as string).replace(/\D/g, '')
+    if (cnpjClean.length === 0) {
+      body.cnpj = null as unknown as string
+    } else if (cnpjClean.length !== 14) {
+      return NextResponse.json({ error: 'CNPJ inválido' }, { status: 400 })
+    } else {
+      const conflict = await prisma.tenant.findUnique({ where: { cnpj: cnpjClean }, select: { id: true } })
+      if (conflict && conflict.id !== tenantId) {
+        return NextResponse.json({ error: 'CNPJ já cadastrado em outro estabelecimento' }, { status: 409 })
+      }
+      body.cnpj = cnpjClean
     }
-    body.cnpj = cnpjClean
   }
 
   const data: Record<string, unknown> = {}
-  if (body.nomeFantasia !== undefined) data.nomeFantasia = body.nomeFantasia.trim()
-  if (body.razaoSocial !== undefined) data.razaoSocial = body.razaoSocial.trim()
-  if (body.cnpj !== undefined) data.cnpj = body.cnpj
-  if (body.endereco !== undefined) data.endereco = body.endereco.trim()
-  if (body.telefone !== undefined) data.telefone = body.telefone.trim()
-  if (body.alvaraSanitario !== undefined) data.alvaraSanitario = body.alvaraSanitario.trim()
+  if (body.nomeFantasia !== undefined) data.nomeFantasia = body.nomeFantasia?.trim() || null
+  if (body.razaoSocial !== undefined) data.razaoSocial = body.razaoSocial?.trim() || null
+  if (body.cnpj !== undefined) data.cnpj = body.cnpj ?? null
+  if (body.endereco !== undefined) data.endereco = body.endereco?.trim() || null
+  if (body.telefone !== undefined) data.telefone = body.telefone?.trim() || null
+  if (body.alvaraSanitario !== undefined) data.alvaraSanitario = body.alvaraSanitario?.trim() || null
   if (body.tipoImpressao !== undefined && ['BOBINA_80MM', 'FOLHA_A4'].includes(body.tipoImpressao)) {
     data.tipoImpressao = body.tipoImpressao
   }
