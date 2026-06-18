@@ -69,9 +69,9 @@ export interface LoteValidade {
 
 export interface PdfFiscalInput {
   tenantNome: string
-  tenantCnpj: string
-  tenantEndereco: string
-  tenantAlvara: string
+  tenantCnpj?: string
+  tenantEndereco?: string
+  tenantAlvara?: string
   dataInicio: string
   dataFim: string
   geradoEm: Date
@@ -131,9 +131,9 @@ export async function generateFiscalPdf(d: PdfFiscalInput): Promise<Uint8Array> 
 
   // Dados do estabelecimento
   text(d.tenantNome, ML, 13, bold, AZUL); y -= 18
-  text(`CNPJ: ${fmtCnpj(d.tenantCnpj)}`, ML, 9); y -= 12
-  text(d.tenantEndereco, ML, 9); y -= 12
-  text(`Alvará Sanitário: ${d.tenantAlvara}`, ML, 9); y -= 20
+  if (d.tenantCnpj) { text(`CNPJ: ${fmtCnpj(d.tenantCnpj)}`, ML, 9); y -= 12 }
+  if (d.tenantEndereco) { text(d.tenantEndereco, ML, 9); y -= 12 }
+  if (d.tenantAlvara) { text(`Alvará Sanitário: ${d.tenantAlvara}`, ML, 9); y -= 20 }
   text(`Período de referência: ${fmtData(d.dataInicio + 'T00:00:00Z')} a ${fmtData(d.dataFim + 'T00:00:00Z')}`, ML, 10, bold, ESCURO)
   y -= 16
 
