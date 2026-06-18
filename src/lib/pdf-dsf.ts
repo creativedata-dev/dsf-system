@@ -5,8 +5,8 @@ export interface PdfDsfInput {
   numeroDsf: string
   dataEmissao: Date
   drogariaNome: string
-  drogariaCnpj: string
-  drogariaTelefone: string
+  drogariaCnpj?: string
+  drogariaTelefone?: string
   rtNome: string
   rtCrf: string | null
   clienteNome: string
@@ -73,7 +73,8 @@ export async function generateDsfPdf(d: PdfDsfInput): Promise<Uint8Array> {
 
   // ── Linha drogaria ───────────────────────────────────────────────────────────
   page.drawText(d.drogariaNome, { x: ML, y, size: 10, font: bold, color: CINZA_ESCURO })
-  page.drawText(`CNPJ: ${d.drogariaCnpj}   Tel: ${d.drogariaTelefone}`, {
+  const infoLine = [d.drogariaCnpj ? `CNPJ: ${d.drogariaCnpj}` : '', d.drogariaTelefone ? `Tel: ${d.drogariaTelefone}` : ''].filter(Boolean).join('   ')
+  page.drawText(infoLine, {
     x: ML, y: y - 14, size: 8, font: reg, color: CINZA_MEDIO,
   })
   const rtLabel = d.rtCrf ? `RT: ${d.rtNome}  |  ${d.rtCrf}` : `RT: ${d.rtNome}`

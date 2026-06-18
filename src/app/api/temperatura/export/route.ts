@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
 
   const pdfBytes = await generateTemperaturaPdf({
     tenantNome: tenant.nomeFantasia,
-    tenantCnpj: tenant.cnpj,
+    tenantCnpj: tenant.cnpj ?? undefined,
     dataInicio: new Date(dataInicio).toLocaleDateString('pt-BR', { timeZone: 'UTC' }),
     dataFim: new Date(dataFim).toLocaleDateString('pt-BR', { timeZone: 'UTC' }),
     registros: registros.map(r => ({

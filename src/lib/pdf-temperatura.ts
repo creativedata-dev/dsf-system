@@ -15,7 +15,7 @@ export interface RegistroParaPdf {
 
 export interface PdfTemperaturaInput {
   tenantNome: string
-  tenantCnpj: string
+  tenantCnpj?: string
   dataInicio: string
   dataFim: string
   registros: RegistroParaPdf[]
@@ -67,7 +67,7 @@ export async function generateTemperaturaPdf(d: PdfTemperaturaInput): Promise<Ui
   page.drawText('Controle de Temperatura e Umidade', {
     x: ML, y: y - 14, size: 14, font: bold, color: BRANCO,
   })
-  page.drawText(`${d.tenantNome} — CNPJ ${fmtCnpj(d.tenantCnpj)}`, {
+  page.drawText(d.tenantCnpj ? `${d.tenantNome} — CNPJ ${fmtCnpj(d.tenantCnpj)}` : d.tenantNome, {
     x: ML, y: y - 30, size: 9, font: reg, color: BRANCO,
   })
   page.drawText(`Período: ${d.dataInicio} a ${d.dataFim}`, {
