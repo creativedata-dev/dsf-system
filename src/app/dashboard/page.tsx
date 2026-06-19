@@ -192,7 +192,7 @@ export default async function DashboardPage() {
   const ts = tempStatus()
 
   return (
-    <div className="p-4 sm:p-6 space-y-5 max-w-screen-xl mx-auto">
+    <div className="p-4 sm:p-6 space-y-5 max-w-5xl mx-auto">
 
       {/* Topbar */}
       <div className="flex items-start justify-between gap-4">
@@ -201,16 +201,14 @@ export default async function DashboardPage() {
           <p className="text-[13px] text-slate-500 mt-0.5">{todayLabel} — visão geral da conformidade</p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
-          {/* Sino — badge se há alertas danger */}
           <button className="relative w-9 h-9 rounded-xl border border-slate-200 bg-white flex items-center justify-center text-slate-500 hover:bg-slate-50 transition-colors">
-            <svg className="w-4.5 h-4.5" style={{ width: 18, height: 18 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <svg style={{ width: 18, height: 18 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
             </svg>
             {alertas.some(a => a.tipo === 'danger') && (
               <span style={{ position: 'absolute', top: 6, right: 6, width: 8, height: 8, borderRadius: '50%', background: '#dc2626', border: '2px solid white' }} />
             )}
           </button>
-          {/* Google Drive */}
           <Link href="/dashboard/configuracoes" className="w-9 h-9 rounded-xl border border-slate-200 bg-white flex items-center justify-center text-slate-500 hover:bg-slate-50 transition-colors" title={drive ? `Drive: ${driveEmail ?? 'conectado'}` : 'Conectar Google Drive'}>
             <svg style={{ width: 18, height: 18 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
@@ -245,63 +243,63 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* Cards de métricas */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+      {/* Cards de métricas — sempre 3 colunas a partir de sm (640px) */}
+      <div className="grid grid-cols-3 gap-3 sm:gap-4">
         {/* DSFs hoje */}
-        <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-5">
-          <div className="flex items-start justify-between mb-3">
-            <p className="text-xs text-slate-500 font-medium leading-tight">DSFs emitidas hoje</p>
-            <div style={{ width: 32, height: 32, borderRadius: 8, background: '#EAF3DE', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <svg style={{ width: 16, height: 16, color: '#3B6D11' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <div className="bg-white rounded-xl border border-slate-200 p-3 sm:p-5">
+          <div className="flex items-start justify-between mb-2 sm:mb-3">
+            <p className="text-[11px] sm:text-xs text-slate-500 font-medium leading-tight">DSFs emitidas hoje</p>
+            <div style={{ width: 28, height: 28, borderRadius: 8, background: '#EAF3DE', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <svg style={{ width: 14, height: 14, color: '#3B6D11' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
           </div>
-          <p className="text-3xl font-semibold text-slate-900">{dsfHoje}</p>
-          <p className="text-xs text-slate-400 mt-0.5">declarações</p>
+          <p className="text-2xl sm:text-3xl font-semibold text-slate-900">{dsfHoje}</p>
+          <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5">declarações</p>
           <div className="flex items-center gap-1.5 mt-2">
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: dsfPendentes > 0 ? '#f59e0b' : '#22c55e', flexShrink: 0, display: 'inline-block' }} />
-            <span className="text-[11px] text-slate-500">{dsfPendentes > 0 ? `${dsfPendentes} pendente${dsfPendentes > 1 ? 's' : ''} de assinatura` : 'todas assinadas'}</span>
+            <span className="text-[10px] sm:text-[11px] text-slate-500 leading-tight">{dsfPendentes > 0 ? `${dsfPendentes} pendente${dsfPendentes > 1 ? 's' : ''}` : 'todas assinadas'}</span>
           </div>
         </div>
 
         {/* Temperatura */}
-        <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-5">
-          <div className="flex items-start justify-between mb-3">
-            <p className="text-xs text-slate-500 font-medium leading-tight">Temperatura ambiente</p>
-            <div style={{ width: 32, height: 32, borderRadius: 8, background: '#FAEEDA', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <svg style={{ width: 16, height: 16, color: '#633806' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <div className="bg-white rounded-xl border border-slate-200 p-3 sm:p-5">
+          <div className="flex items-start justify-between mb-2 sm:mb-3">
+            <p className="text-[11px] sm:text-xs text-slate-500 font-medium leading-tight">Temperatura ambiente</p>
+            <div style={{ width: 28, height: 28, borderRadius: 8, background: '#FAEEDA', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <svg style={{ width: 14, height: 14, color: '#633806' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M14 14.76V3.5a2.5 2.5 0 00-5 0v11.26a4.5 4.5 0 105 0z" />
               </svg>
             </div>
           </div>
-          <p className="text-3xl font-semibold" style={{ color: tempAtual !== null ? tempColor() : '#94a3b8' }}>
+          <p className="text-2xl sm:text-3xl font-semibold" style={{ color: tempAtual !== null ? tempColor() : '#94a3b8' }}>
             {tempAtual !== null ? `${tempAtual.toFixed(1)}°` : '—'}
           </p>
-          <p className="text-xs text-slate-400 mt-0.5">
+          <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5">
             {ultimaTemp ? `última leitura às ${fmtHora(ultimaTemp.dataLeitura)}` : 'sem leituras hoje'}
           </p>
           <div className="flex items-center gap-1.5 mt-2">
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: ts.dot, flexShrink: 0, display: 'inline-block' }} />
-            <span className="text-[11px] text-slate-500">{ts.text}</span>
+            <span className="text-[10px] sm:text-[11px] text-slate-500 leading-tight">{ts.text}</span>
           </div>
         </div>
 
         {/* Clientes */}
-        <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-5 col-span-2 lg:col-span-1">
-          <div className="flex items-start justify-between mb-3">
-            <p className="text-xs text-slate-500 font-medium leading-tight">Clientes cadastrados</p>
-            <div style={{ width: 32, height: 32, borderRadius: 8, background: '#E6F1FB', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <svg style={{ width: 16, height: 16, color: '#185FA5' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+        <div className="bg-white rounded-xl border border-slate-200 p-3 sm:p-5">
+          <div className="flex items-start justify-between mb-2 sm:mb-3">
+            <p className="text-[11px] sm:text-xs text-slate-500 font-medium leading-tight">Clientes cadastrados</p>
+            <div style={{ width: 28, height: 28, borderRadius: 8, background: '#E6F1FB', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <svg style={{ width: 14, height: 14, color: '#185FA5' }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
               </svg>
             </div>
           </div>
-          <p className="text-3xl font-semibold text-slate-900">{totalClientes}</p>
-          <p className="text-xs text-slate-400 mt-0.5">no sistema</p>
+          <p className="text-2xl sm:text-3xl font-semibold text-slate-900">{totalClientes}</p>
+          <p className="text-[11px] sm:text-xs text-slate-400 mt-0.5">no sistema</p>
           <div className="flex items-center gap-1.5 mt-2">
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', flexShrink: 0, display: 'inline-block' }} />
-            <span className="text-[11px] text-slate-500">{clientesSemana > 0 ? `+${clientesSemana} esta semana` : 'nenhum novo esta semana'}</span>
+            <span className="text-[10px] sm:text-[11px] text-slate-500 leading-tight">{clientesSemana > 0 ? `+${clientesSemana} esta semana` : 'nenhum novo'}</span>
           </div>
         </div>
       </div>
@@ -312,7 +310,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Grid alertas + DSFs */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
         {/* Alertas */}
         <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-5">
