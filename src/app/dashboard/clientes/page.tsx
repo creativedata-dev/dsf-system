@@ -82,8 +82,23 @@ const BLANK_REG: RegForm = { nome: '', dataNascimento: '', sexo: '', telefone: '
 
 /* ─── Page ───────────────────────────────────────────────────────────────────── */
 
+interface HistoricoItem {
+  id: string; numeroDsf: string; tipoServico: string; tipoServicoLabel: string
+  dataEmissao: string; status: 'EMITIDA' | 'CONCLUIDA' | 'CANCELADA'
+  clienteNome: string; clienteCpf: string; rtNome: string; rtCrf: string | null
+  driveFileId: string | null
+}
+
+type Tab = 'clientes' | 'historico'
+
 export default function ClientesPage() {
   const searchParams = useSearchParams()
+
+  const [activeTab, setActiveTab] = useState<Tab>('clientes')
+  const [historico, setHistorico] = useState<HistoricoItem[]>([])
+  const [historicoLoading, setHistoricoLoading] = useState(false)
+  const [historicoError, setHistoricoError] = useState<string | null>(null)
+  const [historicoTotal, setHistoricoTotal] = useState(0)
 
   const [mode, setMode] = useState<Mode>('idle')
   const [cpfInput, setCpfInput] = useState('')
@@ -492,10 +507,46 @@ export default function ClientesPage() {
   return (
     <div className="p-4 sm:p-8 max-w-2xl mx-auto">
 
-      <div className="mb-6">
+      <div className="mb-4">
         <h1 className="text-xl font-bold text-slate-900">DSF</h1>
-        <p className="text-sm text-slate-500 mt-0.5">Busque o paciente pelo CPF ou nome para emitir uma Declaração de Serviço Farmacêutico</p>
       </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 mb-6 bg-slate-100 rounded-xl p-1 w-fit">
+        <button
+          type="button"
+          onClick={() => setActiveTab('clientes')}
+          style={activeTab === 'clientes' ? { background: '#28B478', color: '#fff' } : {}}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'clientes' ? '' : 'text-slate-600 hover:text-slate-900'}`}
+        >
+          Clientes
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('historico')
+            if (historico.length === 0 && !historicoLoading) {
+              setHistoricoLoading(true)
+              setHistoricoError(null)
+              fetch('/api/dsf/list?page=1')
+                .then(r => r.json())
+                .then(d => {
+                  if (d.error) setHistoricoError(d.error)
+                  else { setHistorico(d.dsfs); setHistoricoTotal(d.total) }
+                })
+                .catch(() => setHistoricoError('Erro ao carregar histórico.'))
+                .finally(() => setHistoricoLoading(false))
+            }
+          }}
+          style={activeTab === 'historico' ? { background: '#28B478', color: '#fff' } : {}}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${activeTab === 'historico' ? '' : 'text-slate-600 hover:text-slate-900'}`}
+        >
+          Histórico
+        </button>
+      </div>
+
+      {/* ── ABA CLIENTES ── */}
+      {activeTab === 'clientes' && (<>
 
       {/* Search — nome ou CPF com autocomplete */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 mb-5">
@@ -1459,6 +1510,53 @@ export default function ClientesPage() {
           </div>
         </div>
       )}
+
+      </>)}
+
+      {/* ── ABA HISTÓRICO ── */}
+      {activeTab === 'historico' && (
+        <div>
+          {historicoLoading && (
+            <div className="text-center py-12 text-slate-400 text-sm">Carregando histórico...</div>
+          )}
+          {historicoError && (
+            <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">{historicoError}</div>
+          )}
+          {!historicoLoading && !historicoError && historico.length === 0 && (
+            <div className="text-center py-12 text-slate-400 text-sm">Nenhuma DSF encontrada.</div>
+          )}
+          {!historicoLoading && historico.length > 0 && (
+            <>
+              <p className="text-xs text-slate-500 mb-3">{historicoTotal} DSF{historicoTotal !== 1 ? 's' : ''} no total — exibindo as 20 mais recentes</p>
+              <div className="space-y-2">
+                {historico.map(dsf => (
+                  <div key={dsf.id} className="bg-white rounded-xl border border-slate-200 px-4 py-3 flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono text-xs font-semibold text-slate-700">{dsf.numeroDsf}</span>
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${
+                          dsf.status === 'CONCLUIDA' ? 'bg-emerald-100 text-emerald-700' :
+                          dsf.status === 'CANCELADA' ? 'bg-red-100 text-red-700' :
+                          'bg-amber-100 text-amber-700'
+                        }`}>
+                          {dsf.status === 'CONCLUIDA' ? 'Assinada' : dsf.status === 'CANCELADA' ? 'Cancelada' : 'Pendente'}
+                        </span>
+                      </div>
+                      <p className="text-sm font-medium text-slate-800 mt-0.5 truncate">{dsf.clienteNome}</p>
+                      <p className="text-xs text-slate-500">{dsf.tipoServicoLabel}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="text-xs text-slate-500">{new Date(dsf.dataEmissao).toLocaleDateString('pt-BR')}</p>
+                      <p className="text-xs text-slate-400 mt-0.5">{dsf.rtNome}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
     </div>
   )
 }
