@@ -52,12 +52,13 @@ export function DashboardShell({
   diasEmTolerancia,
 }: DashboardShellProps) {
   const [open, setOpen] = useState(false)
+  const [maisOpen, setMaisOpen] = useState(false)
   const [configOpen, setConfigOpen] = useState(false)
   const [medOpen, setMedOpen] = useState(false)
   const pathname = usePathname()
   const clientPathname = useClientPathname()
 
-  useEffect(() => { setOpen(false) }, [pathname])
+  useEffect(() => { setOpen(false); setMaisOpen(false) }, [pathname])
 
   useEffect(() => {
     const configRoutes = ['/dashboard/perfil', '/dashboard/geral', '/dashboard/admin', '/dashboard/configuracoes', '/dashboard/anvisa', '/dashboard/pacientes', '/dashboard/admin/procedimentos']
@@ -95,22 +96,30 @@ export function DashboardShell({
 
   // ── Mobile bottom nav ────────────────────────────────────────────────────
   type MobileNavItem = { href: string; label: string; icon: React.ReactNode }
-  const mobileNavItems: MobileNavItem[] = []
 
+  // Primary (até 2 slots entre Início e Config)
+  const bottomPrimary: MobileNavItem[] = []
   if (permissions.includes('CLIENTE_BUSCAR') && hasModulo(modulosHabilitados, 'DSF')) {
-    mobileNavItems.push({ href: '/dashboard/clientes', label: 'DSF', icon: <IconFileText /> })
+    bottomPrimary.push({ href: '/dashboard/clientes', label: 'DSF', icon: <IconFileText size={22} /> })
   }
   if (hasModulo(modulosHabilitados, 'TEMPERATURA')) {
-    mobileNavItems.push({ href: '/dashboard/temperatura', label: 'Ambiente', icon: <IconThermo /> })
-  }
-  if (hasModulo(modulosHabilitados, 'EQUIPAMENTOS')) {
-    mobileNavItems.push({ href: '/dashboard/equipamentos', label: 'Equip.', icon: <IconWrench /> })
-  }
-  if (hasModulo(modulosHabilitados, 'POPS')) {
-    mobileNavItems.push({ href: '/dashboard/pops', label: 'POPs', icon: <IconBook /> })
+    bottomPrimary.push({ href: '/dashboard/temperatura', label: 'Ambiente', icon: <IconThermo size={22} /> })
   }
 
-  const bottomPrimary = mobileNavItems.slice(0, 2)
+  // Sheet "Mais"
+  const maisNavItems: MobileNavItem[] = []
+  if (hasModulo(modulosHabilitados, 'EQUIPAMENTOS')) {
+    maisNavItems.push({ href: '/dashboard/equipamentos', label: 'Equipamentos', icon: <IconWrench size={20} /> })
+  }
+  if (hasModulo(modulosHabilitados, 'VALIDADE') || hasModulo(modulosHabilitados, 'FRACIONAMENTO')) {
+    maisNavItems.push({ href: '/dashboard/validade', label: 'Medicamentos', icon: <IconPill size={20} color="#64748b" /> })
+  }
+  if (hasModulo(modulosHabilitados, 'POPS')) {
+    maisNavItems.push({ href: '/dashboard/pops', label: 'POPs', icon: <IconBook size={20} /> })
+  }
+  if (hasModulo(modulosHabilitados, 'PAINEL_FISCAL')) {
+    maisNavItems.push({ href: '/dashboard/fiscal', label: 'ANVISA', icon: <IconShield size={20} color="#64748b" /> })
+  }
   const configRoutes = ['/dashboard/perfil', '/dashboard/geral', '/dashboard/admin', '/dashboard/configuracoes', '/dashboard/anvisa', '/dashboard/pacientes', '/dashboard/admin/procedimentos', '/dashboard/saas', '/dashboard/tenants', '/dashboard/planos', '/dashboard/gateways']
   const isConfigActive = !!(clientPathname && configRoutes.some(r => clientPathname.startsWith(r)))
 
@@ -272,22 +281,35 @@ export function DashboardShell({
     <div className="min-h-screen lg:flex lg:h-screen lg:overflow-hidden" style={{ background: '#F1F5F9' }}>
 
       {/* Mobile header */}
-      <header className="sticky top-0 z-30 flex items-center gap-3 bg-white border-b border-slate-200 px-4 py-3 lg:hidden">
-        <button onClick={() => setOpen(true)} className="p-2 -ml-1 rounded-xl text-slate-500 hover:bg-slate-100 active:bg-slate-200 transition-colors" aria-label="Abrir menu">
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
-        </button>
-        <div className="flex items-center gap-2">
-          <div style={{ width: 28, height: 28, borderRadius: 7, background: GREEN, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <IconShield color="white" size={15} />
+      <header className="sticky top-0 z-30 bg-white border-b border-slate-200 lg:hidden" style={{ height: 56 }}>
+        <div className="relative flex items-center h-full px-3">
+          {/* Esquerda: hambúrguer */}
+          <button onClick={() => setOpen(true)} className="w-11 h-11 flex items-center justify-center rounded-xl text-slate-500 active:bg-slate-100 transition-colors -ml-1" aria-label="Abrir menu">
+            <svg width={22} height={22} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+
+          {/* Centro: logo (absolutamente centrado) */}
+          <div className="absolute inset-x-0 top-0 h-full flex items-center justify-center pointer-events-none">
+            <div className="flex items-center gap-1.5">
+              <div style={{ width: 22, height: 22, borderRadius: 6, background: GREEN, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <IconShield color="white" size={12} />
+              </div>
+              <span style={{ fontSize: 15, fontWeight: 600, color: '#0f172a' }}>FarmaSign</span>
+            </div>
           </div>
-          <span className="text-sm font-bold text-slate-900">FarmaSign</span>
+
+          {/* Direita: bell + avatar */}
+          <div className="ml-auto flex items-center gap-1">
+            <button className="w-10 h-10 flex items-center justify-center rounded-full text-slate-500 active:bg-slate-100 transition-colors" aria-label="Alertas">
+              <IconBell size={20} />
+            </button>
+            <Link href="/dashboard/perfil" style={{ width: 32, height: 32, borderRadius: '50%', background: GREEN, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <span style={{ color: 'white', fontSize: 12, fontWeight: 600 }}>{initials}</span>
+            </Link>
+          </div>
         </div>
-        <span className="ml-auto text-xs text-slate-400 truncate max-w-[120px]">{tenantName}</span>
-        <Link href="/dashboard/perfil" style={{ width: 32, height: 32, borderRadius: '50%', background: GREEN, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          <span style={{ color: 'white', fontSize: 12, fontWeight: 600 }}>{initials}</span>
-        </Link>
       </header>
 
       {/* Mobile drawer */}
@@ -321,7 +343,7 @@ export function DashboardShell({
       </aside>
 
       {/* Main */}
-      <main className="flex-1 lg:overflow-y-auto pb-16 lg:pb-0">
+      <main className="flex-1 lg:overflow-y-auto pb-24 lg:pb-0">
         {diasEmTolerancia != null && (
           <div className="bg-red-600 text-white px-4 py-3 flex items-center gap-3">
             <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -340,30 +362,94 @@ export function DashboardShell({
       </main>
 
       {/* Mobile bottom nav */}
-      <nav className="fixed bottom-0 left-0 right-0 z-20 bg-white border-t border-slate-200 lg:hidden safe-bottom">
-        <div className="flex items-stretch h-16">
-          <MobileTabItem href="/dashboard" label="Início" active={clientPathname === '/dashboard'} icon={<IconHome size={20} />} />
+      <nav
+        className="fixed bottom-0 left-0 right-0 z-20 lg:hidden"
+        style={{
+          background: NAVY,
+          borderTop: `1px solid ${SEPARATOR}`,
+          paddingBottom: 'calc(8px + env(safe-area-inset-bottom))',
+        }}
+      >
+        <div className="flex items-stretch" style={{ height: 64 }}>
+          <MobileTabItem href="/dashboard" label="Início" active={clientPathname === '/dashboard'} icon={<IconHome size={22} />} />
           {bottomPrimary.map(item => (
             <MobileTabItem key={item.href} href={item.href} label={item.label} active={!!clientPathname && clientPathname.startsWith(item.href)} icon={item.icon} />
           ))}
-          <MobileTabItem href="/dashboard/perfil" label="Config." active={isConfigActive} icon={<IconSettings size={20} />} />
-          <button onClick={() => setOpen(true)} className="flex-1 flex flex-col items-center justify-center gap-0.5 text-slate-400 active:bg-slate-50 transition-colors select-none">
-            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h7" />
-            </svg>
-            <span className="text-[10px] font-medium">Mais</span>
+          <MobileTabItem href="/dashboard/perfil" label="Config." active={isConfigActive} icon={<IconSettings size={22} />} />
+          <button
+            onClick={() => setMaisOpen(v => !v)}
+            className="flex-1 flex flex-col items-center justify-center gap-1 select-none transition-colors relative pt-1"
+            style={{ color: maisOpen ? GREEN : 'rgba(255,255,255,0.4)', background: 'none', border: 'none', cursor: 'pointer' }}
+          >
+            {maisOpen && (
+              <span style={{
+                position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)',
+                width: 28, height: 2, borderRadius: '0 0 2px 2px', background: GREEN,
+              }} />
+            )}
+            <IconGrid size={22} />
+            <span style={{ fontSize: 10, fontWeight: 500 }}>Mais</span>
           </button>
         </div>
       </nav>
+
+      {/* Bottom sheet "Mais" */}
+      {maisOpen && (
+        <div className="fixed inset-0 z-40 lg:hidden" onClick={() => setMaisOpen(false)}>
+          <div className="absolute inset-0 bg-black/40" />
+          <div
+            className="absolute bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-xl"
+            style={{ paddingBottom: 'calc(16px + env(safe-area-inset-bottom))' }}
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Handle */}
+            <div className="flex justify-center pt-3 pb-2">
+              <div style={{ width: 40, height: 4, borderRadius: 2, background: '#e2e8f0' }} />
+            </div>
+            <p style={{ padding: '2px 20px 10px', fontSize: 11, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+              Mais módulos
+            </p>
+            {maisNavItems.length === 0 ? (
+              <p style={{ padding: '12px 20px', fontSize: 14, color: '#94a3b8' }}>Nenhum módulo adicional habilitado.</p>
+            ) : (
+              maisNavItems.map(item => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setMaisOpen(false)}
+                  className="flex items-center gap-3 px-5 active:bg-slate-50 transition-colors"
+                  style={{ borderTop: '1px solid #f8fafc', paddingTop: 14, paddingBottom: 14 }}
+                >
+                  <span style={{ color: '#64748b', flexShrink: 0 }}>{item.icon}</span>
+                  <span style={{ fontSize: 15, fontWeight: 500, color: '#1e293b', flex: 1 }}>{item.label}</span>
+                  <svg style={{ width: 16, height: 16, color: '#cbd5e1', flexShrink: 0 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
+                </Link>
+              ))
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
 function MobileTabItem({ href, label, active, icon }: { href: string; label: string; active: boolean; icon: React.ReactNode }) {
   return (
-    <Link href={href} className={`flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors select-none active:bg-slate-50 ${active ? 'text-[#28B478]' : 'text-slate-400'}`}>
+    <Link
+      href={href}
+      className="flex-1 flex flex-col items-center justify-center gap-1 select-none transition-colors relative pt-1"
+      style={{ color: active ? '#28B478' : 'rgba(255,255,255,0.4)' }}
+    >
+      {active && (
+        <span style={{
+          position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)',
+          width: 28, height: 2, borderRadius: '0 0 2px 2px', background: '#28B478',
+        }} />
+      )}
       {icon}
-      <span className={`text-[10px] font-medium`}>{label}</span>
+      <span style={{ fontSize: 10, fontWeight: 500 }}>{label}</span>
     </Link>
   )
 }
@@ -423,4 +509,10 @@ function IconTicket({ size = 16, color = 'currentColor' }: { size?: number; colo
 }
 function IconCreditCard({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) {
   return <svg width={size} height={size} fill="none" viewBox="0 0 24 24" stroke={color} strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
+}
+function IconBell({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) {
+  return <svg width={size} height={size} fill="none" viewBox="0 0 24 24" stroke={color} strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
+}
+function IconGrid({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) {
+  return <svg width={size} height={size} fill="none" viewBox="0 0 24 24" stroke={color} strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
 }

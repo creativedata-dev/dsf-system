@@ -194,8 +194,8 @@ export default async function DashboardPage() {
   return (
     <div className="p-4 sm:p-6 space-y-5 max-w-5xl mx-auto">
 
-      {/* Topbar */}
-      <div className="flex items-start justify-between gap-4">
+      {/* Topbar — oculto no mobile (topbar do shell já cobre) */}
+      <div className="hidden sm:flex items-start justify-between gap-4">
         <div>
           <h1 className="text-lg font-semibold text-slate-900">Início</h1>
           <p className="text-[13px] text-slate-500 mt-0.5">{todayLabel} — visão geral da conformidade</p>
@@ -243,8 +243,8 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* Cards de métricas — sempre 3 colunas a partir de sm (640px) */}
-      <div className="grid grid-cols-3 gap-3 sm:gap-4">
+      {/* Cards de métricas — 2 colunas mobile, 3 a partir de sm */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
         {/* DSFs hoje */}
         <div className="bg-white rounded-xl border border-slate-200 p-3 sm:p-5">
           <div className="flex items-start justify-between mb-2 sm:mb-3">
@@ -285,8 +285,8 @@ export default async function DashboardPage() {
           </div>
         </div>
 
-        {/* Clientes */}
-        <div className="bg-white rounded-xl border border-slate-200 p-3 sm:p-5">
+        {/* Clientes — ocupa linha inteira no mobile (col-span-2) */}
+        <div className="col-span-2 sm:col-span-1 bg-white rounded-xl border border-slate-200 p-3 sm:p-5">
           <div className="flex items-start justify-between mb-2 sm:mb-3">
             <p className="text-[11px] sm:text-xs text-slate-500 font-medium leading-tight">Clientes cadastrados</p>
             <div style={{ width: 28, height: 28, borderRadius: 8, background: '#E6F1FB', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -308,6 +308,18 @@ export default async function DashboardPage() {
       <div className="bg-white rounded-xl border border-slate-200 p-4 sm:p-5">
         <CpfSearch />
       </div>
+
+      {/* FAB Nova DSF — mobile only */}
+      <a
+        href="/dashboard/clientes"
+        className="sm:hidden fixed z-30 flex items-center justify-center shadow-lg"
+        style={{ bottom: 'calc(72px + env(safe-area-inset-bottom))', right: 16, width: 52, height: 52, borderRadius: '50%', background: '#28B478' }}
+        aria-label="Nova DSF"
+      >
+        <svg width={22} height={22} fill="none" viewBox="0 0 24 24" stroke="white" strokeWidth={2.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+        </svg>
+      </a>
 
       {/* Grid alertas + DSFs */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
