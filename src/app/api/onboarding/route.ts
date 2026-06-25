@@ -12,18 +12,18 @@ export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: CORS_HEADERS })
 }
 
-// Rate-limit simples em memória: 1 tentativa por IP/minuto
-const rateMap = new Map<string, number>()
+// Rate-limit por email: máx 5 tentativas por hora
+const rateMap = new Map<string, { count: number; windowStart: number }>()
 
-function getIp(req: NextRequest) {
-  return req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
-}
-
-function checkRate(ip: string): boolean {
+function checkRate(key: string): boolean {
   const now = Date.now()
-  const last = rateMap.get(ip) ?? 0
-  if (now - last < 60_000) return false
-  rateMap.set(ip, now)
+  const entry = rateMap.get(key)
+  if (!entry || now - entry.windowStart > 3_600_000) {
+    rateMap.set(key, { count: 1, windowStart: now })
+    return true
+  }
+  if (entry.count >= 5) return false
+  entry.count++
   return true
 }
 
@@ -32,10 +32,7 @@ function json(body: unknown, status = 200) {
 }
 
 export async function POST(req: NextRequest) {
-  const ip = getIp(req)
-  if (!checkRate(ip)) {
-    return json({ error: 'Muitas tentativas. Aguarde 1 minuto.' }, 429)
-  }
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? 'unknown'
 
   let body: unknown
   try { body = await req.json() } catch {
@@ -43,6 +40,10 @@ export async function POST(req: NextRequest) {
   }
 
   const { nomeFantasia, responsavelNome, email, senha } = body as Record<string, string>
+
+  if (!checkRate(email?.trim()?.toLowerCase() ?? 'unknown')) {
+    return json({ error: 'Muitas tentativas para este e-mail. Tente novamente em 1 hora.' }, 429)
+  }
 
   // Validações básicas
   if (!nomeFantasia?.trim() || nomeFantasia.trim().length < 3) {
