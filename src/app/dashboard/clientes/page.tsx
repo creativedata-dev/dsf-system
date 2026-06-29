@@ -668,10 +668,41 @@ export default function ClientesPage() {
                 </F>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <F label="Data de nascimento *">
-                    <input type="date" value={regForm.dataNascimento}
-                      onChange={e => setRegForm(p => ({ ...p, dataNascimento: e.target.value }))}
-                      className={inp} disabled={mode === 'registering_saving'}
-                      max={new Date().toISOString().split('T')[0]} />
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {(() => {
+                        const [y, m, d] = (regForm.dataNascimento || '--').split('-')
+                        const anoAtual = new Date().getFullYear()
+                        function setDMY(part: 'y'|'m'|'d', val: string) {
+                          const ny = part === 'y' ? val : (y || '')
+                          const nm = part === 'm' ? val : (m || '')
+                          const nd = part === 'd' ? val : (d || '')
+                          setRegForm(p => ({ ...p, dataNascimento: ny && nm && nd ? `${ny}-${nm}-${nd}` : '' }))
+                        }
+                        return <>
+                          <select value={d || ''} onChange={e => setDMY('d', e.target.value)}
+                            className={`${inp} appearance-none`} disabled={mode === 'registering_saving'}>
+                            <option value="">Dia</option>
+                            {Array.from({length:31},(_,i)=>i+1).map(n=>(
+                              <option key={n} value={String(n).padStart(2,'0')}>{n}</option>
+                            ))}
+                          </select>
+                          <select value={m || ''} onChange={e => setDMY('m', e.target.value)}
+                            className={`${inp} appearance-none`} disabled={mode === 'registering_saving'}>
+                            <option value="">Mês</option>
+                            {['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'].map((n,i)=>(
+                              <option key={i} value={String(i+1).padStart(2,'0')}>{n}</option>
+                            ))}
+                          </select>
+                          <select value={y || ''} onChange={e => setDMY('y', e.target.value)}
+                            className={`${inp} appearance-none`} disabled={mode === 'registering_saving'}>
+                            <option value="">Ano</option>
+                            {Array.from({length: anoAtual - 1899},(_,i)=> anoAtual - i).map(n=>(
+                              <option key={n} value={String(n)}>{n}</option>
+                            ))}
+                          </select>
+                        </>
+                      })()}
+                    </div>
                   </F>
                   <F label="Sexo *">
                     <select value={regForm.sexo} onChange={e => setRegForm(p => ({ ...p, sexo: e.target.value }))}
