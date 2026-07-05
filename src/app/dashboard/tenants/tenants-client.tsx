@@ -177,7 +177,7 @@ type UserFormState  = typeof BLANK_USER_FORM
 /* ─── Helpers ────────────────────────────────────────────────────────────────── */
 
 function fmtCnpj(v: string) {
-  const d = v.replace(/\D/g, '').slice(0, 14)
+  const d = (v ?? '').replace(/\D/g, '').slice(0, 14)
   return d.replace(/(\d{2})(\d)/, '$1.$2').replace(/(\d{3})(\d)/, '$1.$2')
            .replace(/(\d{3})(\d)/, '$1/$2').replace(/(\d{4})(\d)/, '$1-$2')
 }
@@ -190,7 +190,8 @@ function fmtTel(v: string) {
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
-function fmtCnpjDisplay(cnpj: string) {
+function fmtCnpjDisplay(cnpj: string | null) {
+  if (!cnpj) return '—'
   return cnpj.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5')
 }
 
