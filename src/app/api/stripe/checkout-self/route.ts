@@ -86,7 +86,8 @@ export async function POST(request: NextRequest) {
       allow_promotion_codes: true,
       locale: 'pt-BR',
       payment_method_types: ['card'],
-      payment_method_options: { link: { display: 'hide' } },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      payment_method_options: { link: { display: 'hide' } } as any,
     })
 
     return Response.json({ url: checkoutSession.url })
