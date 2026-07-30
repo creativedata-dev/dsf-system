@@ -134,6 +134,7 @@ export default function ClientesPage() {
   const [saveError, setSaveError] = useState('')
 
   const [regForm, setRegForm] = useState<RegForm>(BLANK_REG)
+  const [regCpf, setRegCpf] = useState('')
   const [regLgpd, setRegLgpd] = useState(false)
   const [regError, setRegError] = useState('')
 
@@ -297,8 +298,9 @@ export default function ClientesPage() {
 
   /* ── Register ───────────────────────────────────────────────────────────────── */
 
-  function openRegister() {
+  function openRegister(cpfDigits?: string) {
     setRegForm(BLANK_REG)
+    setRegCpf(cpfDigits ?? searchedCpf)
     setAddr(BLANK_ADDR)
     setCepError('')
     setRegError('')
@@ -308,6 +310,10 @@ export default function ClientesPage() {
 
   async function handleSubmitReg() {
     setRegError('')
+    const cpfFinal = regCpf || searchedCpf
+    if (!cpfFinal || cpfFinal.replace(/\D/g, '').length !== 11) {
+      setRegError('CPF inválido.'); return
+    }
     const dnParts = regForm.dataNascimento ? regForm.dataNascimento.split('-') : []
     const dnOk = dnParts.length === 3 && dnParts[0] && dnParts[1] && dnParts[2]
     if (!regForm.nome.trim() || !dnOk || !regForm.sexo || !regForm.telefone.trim()) {
@@ -325,7 +331,7 @@ export default function ClientesPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          cpf: searchedCpf,
+          cpf: cpfFinal.replace(/\D/g, ''),
           nome: regForm.nome,
           dataNascimento: regForm.dataNascimento,
           sexo: regForm.sexo,
@@ -616,6 +622,19 @@ export default function ClientesPage() {
             </div>
           )}
         </div>
+
+        <div className="mt-3 pt-3 border-t border-slate-100 flex justify-end">
+          <button
+            type="button"
+            onClick={() => openRegister('')}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+            Novo Cliente
+          </button>
+        </div>
       </div>
 
       {/* ── NOT FOUND ── */}
@@ -645,11 +664,22 @@ export default function ClientesPage() {
       {(mode === 'registering' || mode === 'registering_saving') && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
-            <div>
+            <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-slate-800">Novo cadastro de paciente</p>
-              <p className="text-xs text-slate-400 font-mono mt-0.5">{fmtCpfDisplay(searchedCpf)}</p>
+              {regCpf
+                ? <p className="text-xs text-slate-400 font-mono mt-0.5">{fmtCpfDisplay(regCpf)}</p>
+                : <input
+                    type="text"
+                    value={regCpf}
+                    placeholder="CPF do paciente *"
+                    maxLength={14}
+                    onChange={e => setRegCpf(fmtCpf(e.target.value))}
+                    disabled={mode === 'registering_saving'}
+                    className="mt-1 w-48 px-2 py-1 text-xs font-mono border border-slate-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-400"
+                  />
+              }
             </div>
-            <span className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded-full font-medium">Novo</span>
+            <span className="text-xs bg-blue-50 text-blue-700 border border-blue-200 px-2 py-1 rounded-full font-medium ml-3">Novo</span>
           </div>
 
           <div className="p-5 space-y-5">
