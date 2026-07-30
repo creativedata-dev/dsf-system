@@ -42,13 +42,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
         const diasRestantes = TOLERANCIA_DIAS - diasVencido
 
         if (diasRestantes <= 0) {
-          redirect('/assinatura-expirada')
+          redirect('/dashboard/assinatura-expirada')
         }
         // Dentro da tolerância: deixa acessar mas mostra banner
         diasEmTolerancia = diasRestantes
       } else {
         // Sem expiraEm e já expirada/cancelada → bloqueia
-        redirect('/assinatura-expirada')
+        redirect('/dashboard/assinatura-expirada')
       }
     }
   }

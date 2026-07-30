@@ -253,7 +253,11 @@ export function DashboardShell({
             <><p style={{ fontWeight: 600 }}>Período de teste</p><p suppressHydrationWarning>Expira em {new Date(trialExpiraEm).toLocaleDateString('pt-BR')}</p></>
           )}
           {assinaturaStatus === 'SUSPENSA' && <><p style={{ fontWeight: 600 }}>Assinatura suspensa</p><p>Regularize seu pagamento.</p></>}
-          {(assinaturaStatus === 'EXPIRADA' || assinaturaStatus === 'CANCELADA') && <><p style={{ fontWeight: 600 }}>Acesso encerrado</p><p>Entre em contato com o suporte.</p></>}
+          {(assinaturaStatus === 'EXPIRADA' || assinaturaStatus === 'CANCELADA') && (
+            diasEmTolerancia != null
+              ? <><p style={{ fontWeight: 600 }}>Acesso expira em breve</p><p>Bloqueio em {diasEmTolerancia} dia{diasEmTolerancia !== 1 ? 's' : ''}. Renove seu plano.</p></>
+              : <><p style={{ fontWeight: 600 }}>Acesso encerrado</p><p>Renove seu plano para continuar.</p></>
+          )}
           {assinaturaStatus === 'SEM_ASSINATURA' && <><p style={{ fontWeight: 600 }}>Sem assinatura</p><p>Entre em contato com o suporte.</p></>}
         </div>
       )}
