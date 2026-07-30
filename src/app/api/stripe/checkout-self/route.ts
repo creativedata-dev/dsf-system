@@ -73,7 +73,8 @@ export async function POST(request: NextRequest) {
     const isRecorrente = cadencia !== 'unico'
 
     const checkoutSession = await stripe.checkout.sessions.create({
-      customer: customerId,
+      customer: customerId ?? undefined,
+      customer_email: !customerId ? session.user.email ?? undefined : undefined,
       mode: isRecorrente ? 'subscription' : 'payment',
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: `${baseUrl}/dashboard?checkout=success`,
@@ -85,6 +86,7 @@ export async function POST(request: NextRequest) {
       allow_promotion_codes: true,
       locale: 'pt-BR',
       payment_method_types: ['card'],
+      payment_method_options: { link: { display: 'hide' } },
     })
 
     return Response.json({ url: checkoutSession.url })
