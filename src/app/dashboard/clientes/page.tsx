@@ -308,7 +308,9 @@ export default function ClientesPage() {
 
   async function handleSubmitReg() {
     setRegError('')
-    if (!regForm.nome.trim() || !regForm.dataNascimento || !regForm.sexo || !regForm.telefone.trim()) {
+    const dnParts = regForm.dataNascimento ? regForm.dataNascimento.split('-') : []
+    const dnOk = dnParts.length === 3 && dnParts[0] && dnParts[1] && dnParts[2]
+    if (!regForm.nome.trim() || !dnOk || !regForm.sexo || !regForm.telefone.trim()) {
       setRegError('Preencha todos os campos obrigatórios.'); return
     }
     if (!addr.logradouro.trim() || !addr.numero.trim() || !addr.bairro.trim() || !addr.cidade.trim() || !addr.uf.trim()) {
@@ -670,33 +672,36 @@ export default function ClientesPage() {
                   <F label="Data de nascimento *">
                     <div className="grid grid-cols-3 gap-1.5">
                       {(() => {
-                        const [y, m, d] = (regForm.dataNascimento || '--').split('-')
+                        const parts = regForm.dataNascimento ? regForm.dataNascimento.split('-') : ['', '', '']
+                        const selY = parts[0] || ''
+                        const selM = parts[1] || ''
+                        const selD = parts[2] || ''
                         const anoAtual = new Date().getFullYear()
                         function setDMY(part: 'y'|'m'|'d', val: string) {
                           setRegForm(p => {
-                            const [py, pm, pd] = (p.dataNascimento || '--').split('-')
-                            const ny = part === 'y' ? val : (py || '')
-                            const nm = part === 'm' ? val : (pm || '')
-                            const nd = part === 'd' ? val : (pd || '')
-                            return { ...p, dataNascimento: ny && nm && nd ? `${ny}-${nm}-${nd}` : '' }
+                            const pp = p.dataNascimento ? p.dataNascimento.split('-') : ['', '', '']
+                            const ny = part === 'y' ? val : (pp[0] || '')
+                            const nm = part === 'm' ? val : (pp[1] || '')
+                            const nd = part === 'd' ? val : (pp[2] || '')
+                            return { ...p, dataNascimento: `${ny}-${nm}-${nd}` }
                           })
                         }
                         return <>
-                          <select value={d || ''} onChange={e => setDMY('d', e.target.value)}
+                          <select value={selD} onChange={e => setDMY('d', e.target.value)}
                             className={`${inp} appearance-none`} disabled={mode === 'registering_saving'}>
                             <option value="">Dia</option>
                             {Array.from({length:31},(_,i)=>i+1).map(n=>(
                               <option key={n} value={String(n).padStart(2,'0')}>{n}</option>
                             ))}
                           </select>
-                          <select value={m || ''} onChange={e => setDMY('m', e.target.value)}
+                          <select value={selM} onChange={e => setDMY('m', e.target.value)}
                             className={`${inp} appearance-none`} disabled={mode === 'registering_saving'}>
                             <option value="">Mês</option>
                             {['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'].map((n,i)=>(
                               <option key={i} value={String(i+1).padStart(2,'0')}>{n}</option>
                             ))}
                           </select>
-                          <select value={y || ''} onChange={e => setDMY('y', e.target.value)}
+                          <select value={selY} onChange={e => setDMY('y', e.target.value)}
                             className={`${inp} appearance-none`} disabled={mode === 'registering_saving'}>
                             <option value="">Ano</option>
                             {Array.from({length: anoAtual - 1899},(_,i)=> anoAtual - i).map(n=>(
