@@ -673,10 +673,13 @@ export default function ClientesPage() {
                         const [y, m, d] = (regForm.dataNascimento || '--').split('-')
                         const anoAtual = new Date().getFullYear()
                         function setDMY(part: 'y'|'m'|'d', val: string) {
-                          const ny = part === 'y' ? val : (y || '')
-                          const nm = part === 'm' ? val : (m || '')
-                          const nd = part === 'd' ? val : (d || '')
-                          setRegForm(p => ({ ...p, dataNascimento: ny && nm && nd ? `${ny}-${nm}-${nd}` : '' }))
+                          setRegForm(p => {
+                            const [py, pm, pd] = (p.dataNascimento || '--').split('-')
+                            const ny = part === 'y' ? val : (py || '')
+                            const nm = part === 'm' ? val : (pm || '')
+                            const nd = part === 'd' ? val : (pd || '')
+                            return { ...p, dataNascimento: ny && nm && nd ? `${ny}-${nm}-${nd}` : '' }
+                          })
                         }
                         return <>
                           <select value={d || ''} onChange={e => setDMY('d', e.target.value)}
