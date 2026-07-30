@@ -251,7 +251,7 @@ export function TenantsClient() {
   // Assinatura do tenant selecionado
   const [assinatura, setAssinatura] = useState<AssinaturaItem | null | undefined>(undefined) // undefined = não carregado
   const [planos, setPlanos] = useState<PlanoItem[]>([])
-  const [assinaturaForm, setAssinaturaForm] = useState({ planoId: '', status: 'TRIAL', expiraEm: '', gateway: '', gatewayCustomerId: '', gatewaySubscriptionId: '', obs: '' })
+  const [assinaturaForm, setAssinaturaForm] = useState({ planoId: '', status: 'TRIAL', expiraEm: '', trialExpiraEm: '', gateway: '', gatewayCustomerId: '', gatewaySubscriptionId: '', obs: '' })
   const [assinaturaSaving, setAssinaturaSaving] = useState(false)
   const [assinaturaError, setAssinaturaError] = useState('')
   const [assinaturaSaved, setAssinaturaSaved] = useState(false)
@@ -336,13 +336,14 @@ export function TenantsClient() {
           setAssinaturaForm({
             planoId: a.planoId, status: a.status,
             expiraEm: a.expiraEm ? a.expiraEm.slice(0, 10) : '',
+            trialExpiraEm: a.trialExpiraEm ? a.trialExpiraEm.slice(0, 10) : '',
             gateway: a.gateway ?? '', gatewayCustomerId: a.gatewayCustomerId ?? '',
             gatewaySubscriptionId: a.gatewaySubscriptionId ?? '', obs: a.obs ?? '',
           })
         } else {
           // Sem assinatura: pré-seleciona o primeiro plano ativo
           const primeiro = planosData.find(p => p.ativo)
-          setAssinaturaForm({ planoId: primeiro?.id ?? '', status: 'ATIVA', expiraEm: '', gateway: '', gatewayCustomerId: '', gatewaySubscriptionId: '', obs: '' })
+          setAssinaturaForm({ planoId: primeiro?.id ?? '', status: 'ATIVA', expiraEm: '', trialExpiraEm: '', gateway: '', gatewayCustomerId: '', gatewaySubscriptionId: '', obs: '' })
         }
       }
     } catch { setAssinaturaError('Erro ao carregar assinatura') }
@@ -355,8 +356,8 @@ export function TenantsClient() {
       const method = assinatura ? 'PATCH' : 'POST'
       const url = assinatura ? `/api/admin/assinaturas/${assinatura.id}` : '/api/admin/assinaturas'
       const body = assinatura
-        ? { status: assinaturaForm.status, planoId: assinaturaForm.planoId, expiraEm: assinaturaForm.expiraEm || null, gateway: assinaturaForm.gateway || null, gatewayCustomerId: assinaturaForm.gatewayCustomerId || null, gatewaySubscriptionId: assinaturaForm.gatewaySubscriptionId || null, obs: assinaturaForm.obs || null }
-        : { tenantId: detailTenant.id, ...assinaturaForm, expiraEm: assinaturaForm.expiraEm || null, gateway: assinaturaForm.gateway || null, gatewayCustomerId: assinaturaForm.gatewayCustomerId || null, gatewaySubscriptionId: assinaturaForm.gatewaySubscriptionId || null, obs: assinaturaForm.obs || null }
+        ? { status: assinaturaForm.status, planoId: assinaturaForm.planoId, expiraEm: assinaturaForm.expiraEm || null, trialExpiraEm: assinaturaForm.trialExpiraEm || null, gateway: assinaturaForm.gateway || null, gatewayCustomerId: assinaturaForm.gatewayCustomerId || null, gatewaySubscriptionId: assinaturaForm.gatewaySubscriptionId || null, obs: assinaturaForm.obs || null }
+        : { tenantId: detailTenant.id, ...assinaturaForm, expiraEm: assinaturaForm.expiraEm || null, trialExpiraEm: assinaturaForm.trialExpiraEm || null, gateway: assinaturaForm.gateway || null, gatewayCustomerId: assinaturaForm.gatewayCustomerId || null, gatewaySubscriptionId: assinaturaForm.gatewaySubscriptionId || null, obs: assinaturaForm.obs || null }
       const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       const text = await res.text()
       let json: Record<string, unknown> = {}
@@ -793,10 +794,17 @@ export function TenantsClient() {
                             {['TRIAL','ATIVA','SUSPENSA','CANCELADA','EXPIRADA'].map(s => <option key={s} value={s}>{s}</option>)}
                           </select>
                         </div>
-                        <div>
-                          <label className="block text-xs font-medium text-slate-700 mb-1">Expira em (deixe vazio = vitalício)</label>
-                          <input type="date" value={assinaturaForm.expiraEm} onChange={e => setAssinaturaForm(f => ({ ...f, expiraEm: e.target.value }))}
-                            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-slate-700 mb-1">Expira em (deixe vazio = vitalício)</label>
+                            <input type="date" value={assinaturaForm.expiraEm} onChange={e => setAssinaturaForm(f => ({ ...f, expiraEm: e.target.value }))}
+                              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-slate-700 mb-1">Trial expira em</label>
+                            <input type="date" value={assinaturaForm.trialExpiraEm} onChange={e => setAssinaturaForm(f => ({ ...f, trialExpiraEm: e.target.value }))}
+                              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                          </div>
                         </div>
                         <div className="grid grid-cols-3 gap-3">
                           <div>

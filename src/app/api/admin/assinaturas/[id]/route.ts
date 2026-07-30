@@ -21,9 +21,9 @@ export async function PATCH(
 
   let body: {
     status?: string; planoId?: string; expiraEm?: string | null
-    motivoCancelamento?: string | null; gateway?: string | null
-    gatewayCustomerId?: string | null; gatewaySubscriptionId?: string | null
-    obs?: string | null
+    trialExpiraEm?: string | null; motivoCancelamento?: string | null
+    gateway?: string | null; gatewayCustomerId?: string | null
+    gatewaySubscriptionId?: string | null; obs?: string | null
   }
   try { body = await request.json() } catch {
     return Response.json({ error: 'Corpo inválido' }, { status: 400 })
@@ -42,6 +42,7 @@ export async function PATCH(
   }
   if (body.planoId !== undefined) data.planoId = body.planoId
   if (body.expiraEm !== undefined) data.expiraEm = body.expiraEm ? new Date(body.expiraEm) : null
+  if (body.trialExpiraEm !== undefined) data.trialExpiraEm = body.trialExpiraEm ? new Date(body.trialExpiraEm) : null
   if (body.motivoCancelamento !== undefined) data.motivoCancelamento = body.motivoCancelamento
   if (body.gateway !== undefined) data.gateway = body.gateway
   if (body.gatewayCustomerId !== undefined) data.gatewayCustomerId = body.gatewayCustomerId
