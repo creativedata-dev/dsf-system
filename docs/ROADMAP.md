@@ -216,6 +216,72 @@ E o diferencial visivel. O farmaceutico mostra ao fiscal uma unica tela com o re
 
 ---
 
+## FASE 4 — Onboarding & UX
+**Status:** Em planejamento  
+**Objetivo:** Reduzir o tempo até o primeiro valor (time-to-value) e aumentar ativação do trial
+
+### 4.1 Onboarding guiado pós-cadastro
+
+O fluxo atual cria a conta e exibe um banner com 4 passos, mas sem guia interativo.
+
+**Melhorias planejadas:**
+
+- **Wizard de setup obrigatório** no primeiro acesso (antes de entrar no dashboard):
+  1. Dados da farmácia (CNPJ, endereço, razão social, alvará, telefone)
+  2. Tipo de impressão (80mm vs A4) com preview visual
+  3. Conectar Google Drive (ou pular — com aviso de risco)
+  4. Convidar primeiro colaborador (opcional)
+  - Progresso salvo a cada etapa; usuário pode sair e retomar
+  - Completar o wizard desbloqueia o dashboard completo
+
+- **Checklist persistente** (sidebar ou home) enquanto setup incompleto:
+  - Indicador visual de % concluído
+  - Cada item tem link direto para a ação
+
+- **E-mail de boas-vindas** (via Resend) disparado no onboarding:
+  - Nome do responsável, link para o app, dicas dos primeiros passos
+  - Sequência de 3 e-mails em 3 dias para ativação (D+0, D+2, D+5)
+
+### 4.2 Experiência da primeira DSF
+
+- **Modo demo/tour** na primeira emissão: tooltips contextuais explicando cada campo
+- **Cliente de exemplo** pré-criado no tenant para o farmacêutico testar sem dados reais
+- **Tela de sucesso** pós-primeira DSF com próximo passo sugerido (conectar Drive, convidar equipe)
+
+### 4.3 Empty states acionáveis
+
+Todas as telas com lista vazia hoje mostram apenas texto. Melhorar para:
+- Ícone ilustrativo + explicação do benefício do módulo
+- Botão de ação direto (ex: "Cadastrar primeiro cliente", "Registrar primeira temperatura")
+- Link para documentação/ajuda quando aplicável
+
+### 4.4 Trial experience
+
+- **Contador de trial** visível no header/sidebar (ex: "Trial: 8 dias restantes")
+- **Tela de conversão** quando trial expira: planos com comparação de features
+- **Alerta progressivo**: banner amarelo em D-7, laranja em D-3, vermelho em D-1
+- **Extensão de trial** via painel super admin (já existe o mecanismo de assinatura, falta UX)
+
+---
+
+## FASE 5 — DSF Digital + Mensageria
+**Status:** Em planejamento — ver [`DSF_DIGITAL_MENSAGERIA.md`](./DSF_DIGITAL_MENSAGERIA.md)  
+**Decisões pendentes:** provider WhatsApp (Evolution API vs wa.me), ordem de implementação
+
+### 4.1 Camada de Mensageria (base reutilizável)
+- Adapter pattern multi-provider: Evolution API (WhatsApp), Resend (e-mail)
+- `ConfigMensageria` por tenant + `MensagemLog`
+- Eventos: DSF link, DSF concluída — extensível para agendamentos, lembretes, alertas
+
+### 4.2 DSF Digital
+- Fluxo alternativo ao físico (sem remover o atual)
+- 3 opções pós-emissão: QR na tela / enviar WhatsApp / fluxo físico
+- Rota pública `/assinar/[token]` com canvas de assinatura
+- Comprobatório jurídico: PDF com assinatura + hash SHA-256 + IP + timestamp
+- Considera paciente sem celular/internet — fluxo físico permanece
+
+---
+
 ## Consideracoes Tecnicas para Todas as Fases
 
 ### Retencao de Dados (5 anos — Exigencia ANVISA)

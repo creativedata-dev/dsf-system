@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
       mode: isRecorrente ? 'subscription' : 'payment',
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: `${baseUrl}/dashboard?checkout=success`,
-      cancel_url: `${baseUrl}/dashboard/assinatura-expirada?checkout=cancel`,
+      cancel_url: `${baseUrl}/paywall?checkout=cancel`,
       metadata: { tenantId, planoId: plano.id, cadencia },
       ...(isRecorrente ? {
         subscription_data: { metadata: { tenantId, planoId: plano.id } },
