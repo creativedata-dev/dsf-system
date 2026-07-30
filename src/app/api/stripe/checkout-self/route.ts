@@ -82,6 +82,7 @@ export async function POST(request: NextRequest) {
       ...(isRecorrente ? {
         subscription_data: { metadata: { tenantId, planoId: plano.id } },
       } : {}),
+      allow_promotion_codes: true,
       locale: 'pt-BR',
       payment_method_types: ['card'],
     })
