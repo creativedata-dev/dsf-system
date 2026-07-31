@@ -54,27 +54,13 @@ export async function POST(request: NextRequest) {
       await prisma.plano.update({ where: { id: plano.id }, data: update })
     }
 
-    let customerId = assinatura?.gatewayCustomerId ?? null
-    if (!customerId) {
-      const customer = await stripe.customers.create({
-        name: tenant.nomeFantasia,
-        metadata: { tenantId, cnpj: tenant.cnpj ?? '' },
-      })
-      customerId = customer.id
-      if (assinatura) {
-        await prisma.assinatura.update({
-          where: { tenantId },
-          data: { gatewayCustomerId: customerId, gateway: 'stripe' },
-        })
-      }
-    }
-
     const baseUrl = process.env.NEXTAUTH_URL ?? 'https://app.farmasign.com.br'
     const isRecorrente = cadencia !== 'unico'
 
+    // Não passar customer para evitar Stripe Link com cartão em moeda errada.
+    // O webhook de checkout.session.completed cria/atualiza o customer depois.
     const checkoutSession = await stripe.checkout.sessions.create({
-      customer: customerId ?? undefined,
-      customer_email: !customerId ? session.user.email ?? undefined : undefined,
+      customer_email: session.user.email ?? undefined,
       mode: isRecorrente ? 'subscription' : 'payment',
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: `${baseUrl}/dashboard?checkout=success`,
@@ -86,8 +72,6 @@ export async function POST(request: NextRequest) {
       allow_promotion_codes: true,
       locale: 'pt-BR',
       payment_method_types: ['card'],
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      payment_method_options: { link: { display: 'hide' } } as any,
     })
 
     return Response.json({ url: checkoutSession.url })
