@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
       customer_email: session.user.email ?? undefined,
       mode: isRecorrente ? 'subscription' : 'payment',
       line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${baseUrl}/dashboard?checkout=success`,
+      success_url: `${baseUrl}/api/stripe/checkout-success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${baseUrl}/paywall?checkout=cancel`,
       metadata: { tenantId, planoId: plano.id, cadencia },
       ...(isRecorrente ? {
