@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
   const [cliente, tenant, procedimentoConfig] = await Promise.all([
     prisma.cliente.findUnique({
       where: { id: clienteId },
-      select: { id: true, tenantId: true, nome: true, cpf: true, dataNascimento: true, sexo: true, telefone: true, endereco: true },
+      select: { id: true, tenantId: true, nome: true, cpf: true, dataNascimento: true, sexo: true, telefone: true, endereco: true, email: true },
     }),
     prisma.tenant.findUnique({
       where: { id: tenantId },
