@@ -87,7 +87,8 @@ const BLANK_REG: RegForm = { nome: '', dataNascimento: '', sexo: '', telefone: '
 interface HistoricoItem {
   id: string; numeroDsf: string; tipoServico: string; tipoServicoLabel: string
   dataEmissao: string; status: 'EMITIDA' | 'CONCLUIDA' | 'CANCELADA'
-  clienteNome: string; clienteCpf: string; rtNome: string; rtCrf: string | null
+  clienteId: string; clienteNome: string; clienteCpf: string; clienteEmail: string | null
+  rtNome: string; rtCrf: string | null
   driveFileId: string | null
 }
 
@@ -117,6 +118,7 @@ export default function ClientesPage() {
   const [receiptDsf, setReceiptDsf] = useState<ReceiptDsf | null>(null)
   const [showSignModal, setShowSignModal] = useState(false)
   const [signResult, setSignResult] = useState<{ hash: string; timestamp: string; emailEnviado: boolean } | null>(null)
+  const [historicoSignDsfId, setHistoricoSignDsfId] = useState<string | null>(null)
   const [dsfHistory, setDsfHistory] = useState<DsfHistoryItem[]>([])
   const [dsfHistoryLoading, setDsfHistoryLoading] = useState(false)
 
@@ -1618,7 +1620,7 @@ export default function ClientesPage() {
               <div className="space-y-2">
                 {historico.map(dsf => (
                   <div key={dsf.id} className="bg-white rounded-xl border border-slate-200 px-4 py-3 flex items-start justify-between gap-3">
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-mono text-xs font-semibold text-slate-700">{dsf.numeroDsf}</span>
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${
@@ -1631,6 +1633,38 @@ export default function ClientesPage() {
                       </div>
                       <p className="text-sm font-medium text-slate-800 mt-0.5 truncate">{dsf.clienteNome}</p>
                       <p className="text-xs text-slate-500">{dsf.tipoServicoLabel}</p>
+                      <div className="flex gap-2 mt-2">
+                        {dsf.status === 'EMITIDA' && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setReceiptDsf({
+                                id: dsf.id,
+                                numeroDsf: dsf.numeroDsf,
+                                clienteNome: dsf.clienteNome,
+                                clienteEmail: dsf.clienteEmail,
+                                rtNome: dsf.rtNome,
+                                rtCrf: dsf.rtCrf,
+                              } as ReceiptDsf)
+                              setHistoricoSignDsfId(dsf.id)
+                              setShowSignModal(true)
+                            }}
+                            className="px-2.5 py-1 text-[11px] font-medium rounded-lg bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100"
+                          >
+                            Concluir
+                          </button>
+                        )}
+                        {dsf.status === 'CONCLUIDA' && dsf.driveFileId && (
+                          <a
+                            href={`https://drive.google.com/file/d/${dsf.driveFileId}/view`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2.5 py-1 text-[11px] font-medium rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
+                          >
+                            Ver PDF
+                          </a>
+                        )}
+                      </div>
                     </div>
                     <div className="text-right shrink-0">
                       <p className="text-xs text-slate-500">{new Date(dsf.dataEmissao).toLocaleDateString('pt-BR')}</p>
@@ -1652,11 +1686,20 @@ export default function ClientesPage() {
           clienteEmail={receiptDsf.clienteEmail}
           rtNome={receiptDsf.rtNome}
           rtCrf={receiptDsf.rtCrf}
-          onClose={() => setShowSignModal(false)}
+          onClose={() => { setShowSignModal(false); setHistoricoSignDsfId(null) }}
           onSuccess={(result) => {
             setShowSignModal(false)
-            setSignResult(result)
-            setMode('dsf_concluida')
+            if (historicoSignDsfId) {
+              setHistoricoSignDsfId(null)
+              setHistoricoLoading(true)
+              fetch('/api/dsf/list?page=1')
+                .then(r => r.json())
+                .then(d => { if (!d.error) { setHistorico(d.dsfs); setHistoricoTotal(d.total) } })
+                .finally(() => setHistoricoLoading(false))
+            } else {
+              setSignResult(result)
+              setMode('dsf_concluida')
+            }
           }}
         />
       )}
