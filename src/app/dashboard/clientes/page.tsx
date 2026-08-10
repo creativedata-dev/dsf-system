@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
+import { DsfSignatureModal } from '@/components/dsf-signature-modal'
 
 /* ─── Types ──────────────────────────────────────────────────────────────────── */
 
@@ -41,6 +42,7 @@ interface ReceiptDsf {
   clienteCpf: string
   clienteDataNasc: string
   clienteTelefone: string
+  clienteEmail: string | null
   tipoServico: string
   tipoServicoLabel: string
   textoOrientacao: string | null
@@ -113,6 +115,8 @@ export default function ClientesPage() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [cliente, setCliente] = useState<ClienteData | null>(null)
   const [receiptDsf, setReceiptDsf] = useState<ReceiptDsf | null>(null)
+  const [showSignModal, setShowSignModal] = useState(false)
+  const [signResult, setSignResult] = useState<{ hash: string; timestamp: string; emailEnviado: boolean } | null>(null)
   const [dsfHistory, setDsfHistory] = useState<DsfHistoryItem[]>([])
   const [dsfHistoryLoading, setDsfHistoryLoading] = useState(false)
 
@@ -1157,12 +1161,26 @@ export default function ClientesPage() {
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6.72 13.829c-.24.03-.48.062-.72.096m.72-.096a42.415 42.415 0 0110.56 0m-10.56 0L6.34 18m10.94-4.171c.24.03.48.062.72.096m-.72-.096L17.66 18m0 0l.229 2.523a1.125 1.125 0 01-1.12 1.227H7.231c-.662 0-1.18-.568-1.12-1.227L6.34 18m11.318 0h1.091A2.25 2.25 0 0021 15.75V9.456c0-1.081-.768-2.015-1.837-2.175a48.055 48.055 0 00-1.913-.247M6.34 18H5.25A2.25 2.25 0 013 15.75V9.456c0-1.081.768-2.015 1.837-2.175a48.056 48.056 0 011.913-.247m10.5 0a48.536 48.536 0 00-10.5 0m10.5 0V3.375c0-.621-.504-1.125-1.125-1.125h-8.25c-.621 0-1.125.504-1.125 1.125v3.659M18 10.5h.008v.008H18V10.5zm-3 0h.008v.008H15V10.5z" /></svg>
               {receiptDsf.tipoImpressao === 'FOLHA_A4' ? 'Imprimir Folha A4' : 'Imprimir Cupom DSF'}
             </button>
+            <button type="button" onClick={() => setShowSignModal(true)}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition-colors">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" /></svg>
+              Assinar Digitalmente
+            </button>
             <button type="button" onClick={() => { setCapturedImage(null); setMode('dsf_scanning') }}
               className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold rounded-xl transition-colors">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z" /><path strokeLinecap="round" strokeLinejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z" /></svg>
               {isMobile ? 'Fotografar Cupom Assinado' : 'Anexar Cupom Assinado'}
             </button>
           </div>
+
+          {signResult && (
+            <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 text-sm text-green-800 space-y-1">
+              <p className="font-semibold">DSF assinada digitalmente</p>
+              <p className="text-xs text-green-600 font-mono break-all">SHA-256: {signResult.hash}</p>
+              <p className="text-xs text-green-600">Assinado em: {new Date(signResult.timestamp).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</p>
+              {signResult.emailEnviado && <p className="text-xs text-green-600">Email enviado para o paciente.</p>}
+            </div>
+          )}
 
           {receiptDsf.tipoImpressao === 'FOLHA_A4' ? (
             /* ── Layout A4 — Relatório clínico ── */
@@ -1624,6 +1642,23 @@ export default function ClientesPage() {
             </>
           )}
         </div>
+      )}
+
+      {showSignModal && receiptDsf && (
+        <DsfSignatureModal
+          dsfId={receiptDsf.id}
+          numeroDsf={receiptDsf.numeroDsf}
+          clienteNome={receiptDsf.clienteNome}
+          clienteEmail={receiptDsf.clienteEmail}
+          rtNome={receiptDsf.rtNome}
+          rtCrf={receiptDsf.rtCrf}
+          onClose={() => setShowSignModal(false)}
+          onSuccess={(result) => {
+            setShowSignModal(false)
+            setSignResult(result)
+            setMode('dsf_concluida')
+          }}
+        />
       )}
 
     </div>

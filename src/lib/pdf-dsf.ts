@@ -41,7 +41,27 @@ function fmtCpf(cpf: string): string {
 // pdf-lib StandardFonts usam WinAnsiEncoding (cobre todos os caracteres do português)
 // Se houver problemas de renderização em algum leitor, adicionar fonte TTF customizada aqui.
 
-export async function generateDsfPdf(d: PdfDsfInput): Promise<Uint8Array> {
+export interface DsfAssinaturas {
+  paciente?: string  // base64 PNG data URL
+  rt?: string        // base64 PNG data URL
+}
+
+export interface DsfComprovante {
+  hash: string
+  timestamp: string  // ISO 8601 UTC
+}
+
+function base64ToBytes(dataUrl: string): Uint8Array {
+  const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, '')
+  const binary = Buffer.from(base64, 'base64')
+  return new Uint8Array(binary.buffer, binary.byteOffset, binary.byteLength)
+}
+
+export async function generateDsfPdf(
+  d: PdfDsfInput,
+  assinaturas?: DsfAssinaturas,
+  comprovante?: DsfComprovante
+): Promise<Uint8Array> {
   const doc = await PDFDocument.create()
   const page = doc.addPage(PageSizes.A4)
   const { width, height } = page.getSize()
@@ -185,24 +205,51 @@ export async function generateDsfPdf(d: PdfDsfInput): Promise<Uint8Array> {
     y -= 8
   }
 
-  // ── Assinatura ────────────────────────────────────────────────────────────────
+  // ── Assinaturas ───────────────────────────────────────────────────────────────
   y -= 10
   page.drawLine({ start: { x: ML, y }, end: { x: width - MR, y }, thickness: 0.5, color: CINZA_CLARO })
-  y -= 30
-  const sigW = 180
-  const sigX = width / 2 - sigW / 2
-  page.drawLine({ start: { x: sigX, y }, end: { x: sigX + sigW, y }, thickness: 0.8, color: CINZA_MEDIO })
-  y -= 12
-  const rtSig = d.rtCrf ? `${d.rtNome}  |  ${d.rtCrf}` : d.rtNome
-  const sigLabelW = bold.widthOfTextAtSize(rtSig, 8)
-  page.drawText(rtSig, { x: width / 2 - sigLabelW / 2, y, size: 8, font: bold, color: CINZA_ESCURO })
-  y -= 11
-  const cargo = 'Responsavel Tecnico'
-  const cargoW = reg.widthOfTextAtSize(cargo, 7.5)
-  page.drawText(cargo, { x: width / 2 - cargoW / 2, y, size: 7.5, font: reg, color: CINZA_MEDIO })
+  y -= 14
+
+  page.drawRectangle({ x: ML - 6, y: y - 4, width: 100, height: 13, color: CINZA_CLARO })
+  page.drawText('ASSINATURAS', { x: ML, y, size: 8, font: bold, color: AZUL })
+  y -= 14
+
+  const sigBoxW = (CW - 20) / 2
+  const sigBoxH = 60
+  const sigPacienteX = ML
+  const sigRtX = ML + sigBoxW + 20
+
+  // caixa paciente
+  page.drawRectangle({ x: sigPacienteX, y: y - sigBoxH, width: sigBoxW, height: sigBoxH, borderColor: CINZA_CLARO, borderWidth: 0.5, color: rgb(0.98, 0.98, 0.99) })
+  if (assinaturas?.paciente) {
+    try {
+      const imgBytes = base64ToBytes(assinaturas.paciente)
+      const img = await doc.embedPng(imgBytes)
+      const imgDim = img.scaleToFit(sigBoxW - 16, sigBoxH - 16)
+      page.drawImage(img, { x: sigPacienteX + (sigBoxW - imgDim.width) / 2, y: y - sigBoxH + (sigBoxH - imgDim.height) / 2, width: imgDim.width, height: imgDim.height })
+    } catch { /* assinatura inválida — deixa caixa em branco */ }
+  }
+  page.drawText('Assinatura do Paciente', { x: sigPacienteX + 4, y: y - sigBoxH - 12, size: 7.5, font: bold, color: CINZA_MEDIO })
+  page.drawText(d.clienteNome, { x: sigPacienteX + 4, y: y - sigBoxH - 22, size: 7, font: reg, color: CINZA_ESCURO })
+
+  // caixa RT
+  page.drawRectangle({ x: sigRtX, y: y - sigBoxH, width: sigBoxW, height: sigBoxH, borderColor: CINZA_CLARO, borderWidth: 0.5, color: rgb(0.98, 0.98, 0.99) })
+  if (assinaturas?.rt) {
+    try {
+      const imgBytes = base64ToBytes(assinaturas.rt)
+      const img = await doc.embedPng(imgBytes)
+      const imgDim = img.scaleToFit(sigBoxW - 16, sigBoxH - 16)
+      page.drawImage(img, { x: sigRtX + (sigBoxW - imgDim.width) / 2, y: y - sigBoxH + (sigBoxH - imgDim.height) / 2, width: imgDim.width, height: imgDim.height })
+    } catch { /* assinatura inválida — deixa caixa em branco */ }
+  }
+  const rtSig = d.rtCrf ? `${d.rtNome}  |  CRF: ${d.rtCrf}` : d.rtNome
+  page.drawText('Responsavel Tecnico / Farmaceutico', { x: sigRtX + 4, y: y - sigBoxH - 12, size: 7.5, font: bold, color: CINZA_MEDIO })
+  page.drawText(rtSig, { x: sigRtX + 4, y: y - sigBoxH - 22, size: 7, font: reg, color: CINZA_ESCURO })
+
+  y -= sigBoxH + 32
 
   // ── Rodapé legal ANVISA ──────────────────────────────────────────────────────
-  const footerY = 40
+  const footerY = comprovante ? 54 : 40
   page.drawLine({
     start: { x: ML, y: footerY + 24 },
     end: { x: width - MR, y: footerY + 24 },
@@ -213,6 +260,11 @@ export async function generateDsfPdf(d: PdfDsfInput): Promise<Uint8Array> {
   const footer2 = 'Declaracao emitida em conformidade com a ANVISA RDC 44/2009 e legislacao vigente. Dados protegidos conforme LGPD (Lei 13.709/2018).'
   page.drawText(footer1, { x: ML, y: footerY + 12, size: 6.5, font: oblique, color: CINZA_MEDIO })
   page.drawText(footer2, { x: ML, y: footerY, size: 6.5, font: oblique, color: CINZA_MEDIO })
+
+  if (comprovante) {
+    page.drawText(`SHA-256: ${comprovante.hash}`, { x: ML, y: footerY - 12, size: 5.5, font: reg, color: CINZA_MEDIO })
+    page.drawText(`Assinado em: ${comprovante.timestamp} (UTC)`, { x: ML, y: footerY - 22, size: 5.5, font: reg, color: CINZA_MEDIO })
+  }
 
   return doc.save()
 }

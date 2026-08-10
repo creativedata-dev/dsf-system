@@ -166,6 +166,7 @@ export async function POST(request: NextRequest) {
     clienteCpf: cliente.cpf,
     clienteDataNasc: cliente.dataNascimento.toISOString(),
     clienteTelefone: cliente.telefone,
+    clienteEmail: cliente.email ?? null,
     tipoServico,
     tipoServicoLabel: TIPO_SERVICO_LABELS[tipoServico] ?? tipoServico,
     textoOrientacao: procedimentoConfig?.textoOrientacao ?? null,

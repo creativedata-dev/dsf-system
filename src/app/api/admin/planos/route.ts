@@ -37,6 +37,7 @@ export async function POST(request: NextRequest) {
     precoMensal?: number | null; precoAnual?: number | null
     limiteUsuarios?: number | null; limiteDsfsMes?: number | null
     trialDias?: number | null; ativo?: boolean
+    modulosHabilitados?: string[]
   }
   try { body = await request.json() } catch {
     return Response.json({ error: 'Corpo inválido' }, { status: 400 })
@@ -56,6 +57,7 @@ export async function POST(request: NextRequest) {
       limiteUsuarios: body.limiteUsuarios ?? null,
       limiteDsfsMes: body.limiteDsfsMes ?? null,
       trialDias: body.trialDias ?? null,
+      modulosHabilitados: body.modulosHabilitados ?? [],
       ativo: body.ativo ?? true,
     },
   })
@@ -82,7 +84,7 @@ export async function PATCH(request: NextRequest) {
     return Response.json({ error: 'Sem permissão' }, { status: 403 })
   }
 
-  let body: { id: string; nome?: string; descricao?: string; precoMensal?: number | null; precoAnual?: number | null; limiteUsuarios?: number | null; limiteDsfsMes?: number | null; trialDias?: number | null; ativo?: boolean }
+  let body: { id: string; nome?: string; descricao?: string; precoMensal?: number | null; precoAnual?: number | null; limiteUsuarios?: number | null; limiteDsfsMes?: number | null; trialDias?: number | null; ativo?: boolean; modulosHabilitados?: string[] }
   try { body = await request.json() } catch {
     return Response.json({ error: 'Corpo inválido' }, { status: 400 })
   }
@@ -97,6 +99,7 @@ export async function PATCH(request: NextRequest) {
   if (body.limiteUsuarios !== undefined) data.limiteUsuarios = body.limiteUsuarios
   if (body.limiteDsfsMes !== undefined) data.limiteDsfsMes = body.limiteDsfsMes
   if (body.trialDias !== undefined) data.trialDias = body.trialDias
+  if (body.modulosHabilitados !== undefined) data.modulosHabilitados = body.modulosHabilitados
   if (body.ativo !== undefined) data.ativo = body.ativo
 
   const plano = await prisma.plano.update({ where: { id: body.id }, data })

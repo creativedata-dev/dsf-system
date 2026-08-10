@@ -4,6 +4,16 @@ import { useState, useEffect, useCallback } from 'react'
 
 type TipoPlano = 'TRIAL' | 'MENSAL' | 'ANUAL' | 'VITALICIO'
 
+const MODULOS_OPCOES = [
+  { slug: 'DSF', label: 'Emissão DSF' },
+  { slug: 'TEMPERATURA', label: 'Temperatura e Umidade' },
+  { slug: 'EQUIPAMENTOS', label: 'Equipamentos e Calibração' },
+  { slug: 'POPS', label: 'POPs e Treinamentos' },
+  { slug: 'PAINEL_FISCAL', label: 'Painel do Fiscal' },
+  { slug: 'VALIDADE', label: 'Validade e Quarentena' },
+  { slug: 'FRACIONAMENTO', label: 'Fracionamento com QR Code' },
+]
+
 interface Plano {
   id: string
   nome: string
@@ -14,6 +24,7 @@ interface Plano {
   limiteUsuarios: number | null
   limiteDsfsMes: number | null
   trialDias: number | null
+  modulosHabilitados: string[]
   ativo: boolean
   createdAt: string
   _count: { assinaturas: number }
@@ -41,7 +52,7 @@ function fmtBRL(centavos: number | null) {
 const BLANK_FORM = {
   nome: '', descricao: '', tipo: 'MENSAL' as TipoPlano,
   precoMensal: '', precoAnual: '', limiteUsuarios: '', limiteDsfsMes: '',
-  trialDias: '', ativo: true,
+  trialDias: '', modulosHabilitados: [] as string[], ativo: true,
 }
 
 type PlanoForm = typeof BLANK_FORM
@@ -59,6 +70,14 @@ function PlanoModal({
 }) {
   const set = (key: keyof PlanoForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     onChange({ ...form, [key]: e.target.type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value })
+
+  function toggleModulo(slug: string) {
+    const list = form.modulosHabilitados
+    onChange({
+      ...form,
+      modulosHabilitados: list.includes(slug) ? list.filter(s => s !== slug) : [...list, slug],
+    })
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -142,6 +161,26 @@ function PlanoModal({
             </div>
           )}
 
+          {/* Módulos */}
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">
+              Módulos habilitados <span className="text-slate-400">(vazio = todos)</span>
+            </label>
+            <div className="grid grid-cols-2 gap-1.5">
+              {MODULOS_OPCOES.map(m => (
+                <label key={m.slug} className="flex items-center gap-2 cursor-pointer select-none rounded-lg border border-slate-200 px-2.5 py-1.5 hover:bg-slate-50">
+                  <input
+                    type="checkbox"
+                    checked={form.modulosHabilitados.includes(m.slug)}
+                    onChange={() => toggleModulo(m.slug)}
+                    className="w-3.5 h-3.5 rounded accent-blue-600 flex-shrink-0"
+                  />
+                  <span className="text-xs text-slate-700 leading-tight">{m.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
           {/* Ativo */}
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <input type="checkbox" checked={form.ativo} onChange={set('ativo')} className="w-4 h-4 rounded accent-blue-600" />
@@ -204,6 +243,7 @@ export default function PlanosPage() {
       limiteUsuarios: p.limiteUsuarios != null ? String(p.limiteUsuarios) : '',
       limiteDsfsMes: p.limiteDsfsMes != null ? String(p.limiteDsfsMes) : '',
       trialDias: p.trialDias != null ? String(p.trialDias) : '',
+      modulosHabilitados: p.modulosHabilitados ?? [],
       ativo: p.ativo,
     })
     setFormError('')
@@ -220,6 +260,7 @@ export default function PlanosPage() {
       limiteUsuarios: form.limiteUsuarios ? parseInt(form.limiteUsuarios) : null,
       limiteDsfsMes: form.limiteDsfsMes ? parseInt(form.limiteDsfsMes) : null,
       trialDias: form.trialDias ? parseInt(form.trialDias) : null,
+      modulosHabilitados: form.modulosHabilitados,
       ativo: form.ativo,
     }
   }
@@ -288,6 +329,7 @@ export default function PlanosPage() {
                 <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Anual</th>
                 <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Users</th>
                 <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">DSFs</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">Módulos</th>
                 <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase tracking-wider">Assin.</th>
                 <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">Ações</th>
               </tr>
@@ -312,6 +354,19 @@ export default function PlanosPage() {
                   <td className="px-4 py-3 text-right text-slate-700 tabular-nums text-sm">{fmtBRL(p.precoAnual)}</td>
                   <td className="px-4 py-3 text-center text-slate-600 text-sm">{p.limiteUsuarios ?? '∞'}</td>
                   <td className="px-4 py-3 text-center text-slate-600 text-sm">{p.limiteDsfsMes ?? '∞'}</td>
+                  <td className="px-4 py-3">
+                    {p.modulosHabilitados.length === 0 ? (
+                      <span className="text-xs text-slate-400">Todos</span>
+                    ) : (
+                      <div className="flex flex-wrap gap-1">
+                        {p.modulosHabilitados.map(slug => (
+                          <span key={slug} className="inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700">
+                            {MODULOS_OPCOES.find(m => m.slug === slug)?.label ?? slug}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-center">
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${p.ativo ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>
                       {p._count.assinaturas} · {p.ativo ? 'Ativo' : 'Inativo'}
@@ -333,7 +388,7 @@ export default function PlanosPage() {
               ))}
               {planos.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-5 py-12 text-center text-sm text-slate-400">
+                  <td colSpan={9} className="px-5 py-12 text-center text-sm text-slate-400">
                     Nenhum plano cadastrado.
                   </td>
                 </tr>

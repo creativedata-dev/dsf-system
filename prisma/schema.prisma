@@ -220,6 +220,8 @@ model DSF {
   observacoes          String?
   status               DsfStatus   @default(EMITIDA)
   driveFileId          String?
+  hashDocumento        String?
+  assinadoEm           DateTime?
   createdAt            DateTime    @default(now())
   updatedAt            DateTime    @updatedAt
 
@@ -308,6 +310,7 @@ model Plano {
   limiteUsuarios   Int?      // null = ilimitado
   limiteDsfsMes    Int?      // null = ilimitado
   trialDias            Int?      // apenas para tipo TRIAL
+  modulosHabilitados   String[]  @default([]) // slugs dos módulos; [] = todos habilitados
   ativo                Boolean   @default(true)
   stripeMonthlyPriceId String?   // Stripe Price ID para cobrança mensal
   stripeAnnualPriceId  String?   // Stripe Price ID para cobrança anual
