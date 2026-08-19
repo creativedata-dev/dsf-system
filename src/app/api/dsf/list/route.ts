@@ -51,6 +51,7 @@ export async function GET(request: NextRequest) {
     cliente: { select: { id: true, nome: true, cpf: true, email: true } },
     responsavelTecnico: { select: { nome: true, crf: true } },
     atendente: { select: { nome: true } },
+    insumos: { select: { nomeProduto: true, lote: true, fabricante: true, validade: true, quantidade: true, unidade: true } },
   }
 
   if (format === 'csv') {
@@ -118,6 +119,7 @@ export async function GET(request: NextRequest) {
       rtNome: d.responsavelTecnico.nome,
       rtCrf: d.responsavelTecnico.crf,
       atendenteNome: d.atendente.nome,
+      insumos: d.insumos.map(i => ({ nomeProduto: i.nomeProduto, lote: i.lote, fabricante: i.fabricante, validade: i.validade.toISOString().slice(0, 10), quantidade: i.quantidade.toString(), unidade: i.unidade })),
     })),
   })
 }

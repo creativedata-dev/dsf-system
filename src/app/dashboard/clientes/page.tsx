@@ -90,6 +90,8 @@ interface HistoricoItem {
   clienteId: string; clienteNome: string; clienteCpf: string; clienteEmail: string | null
   rtNome: string; rtCrf: string | null
   driveFileId: string | null
+  observacoes: string | null
+  insumos: { nomeProduto: string; lote: string; fabricante: string; validade: string; quantidade: string; unidade: string }[]
 }
 
 type Tab = 'clientes' | 'historico'
@@ -1652,6 +1654,36 @@ export default function ClientesPage() {
                             className="px-2.5 py-1 text-[11px] font-medium rounded-lg bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100"
                           >
                             Concluir
+                          </button>
+                        )}
+                        {dsf.status === 'CANCELADA' && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const res = await fetch('/api/dsf/reabrir', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ dsfId: dsf.id }),
+                              })
+                              const data = await res.json()
+                              if (!res.ok) { alert(data.error ?? 'Erro ao reabrir DSF'); return }
+                              setHistorico(prev => prev.map(d =>
+                                d.id === dsf.id ? { ...d, status: 'EMITIDA' } : d
+                              ))
+                              setReceiptDsf({
+                                id: data.dsfId,
+                                numeroDsf: data.numeroDsf,
+                                clienteNome: data.clienteNome,
+                                clienteEmail: data.clienteEmail,
+                                rtNome: data.rtNome,
+                                rtCrf: data.rtCrf,
+                              } as ReceiptDsf)
+                              setHistoricoSignDsfId(data.dsfId)
+                              setShowSignModal(true)
+                            }}
+                            className="px-2.5 py-1 text-[11px] font-medium rounded-lg bg-red-50 text-red-700 border border-red-200 hover:bg-red-100"
+                          >
+                            Reabrir e Concluir
                           </button>
                         )}
                         {dsf.status === 'CONCLUIDA' && dsf.driveFileId && (
