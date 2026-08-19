@@ -1670,16 +1670,11 @@ export default function ClientesPage() {
                               setHistorico(prev => prev.map(d =>
                                 d.id === dsf.id ? { ...d, status: 'EMITIDA' } : d
                               ))
-                              setReceiptDsf({
-                                id: data.dsfId,
-                                numeroDsf: data.numeroDsf,
-                                clienteNome: data.clienteNome,
-                                clienteEmail: data.clienteEmail,
-                                rtNome: data.rtNome,
-                                rtCrf: data.rtCrf,
-                              } as ReceiptDsf)
-                              setHistoricoSignDsfId(data.dsfId)
-                              setShowSignModal(true)
+                              const dsfRes = await fetch(`/api/dsf/${dsf.id}`)
+                              const dsfData: ReceiptDsf = await dsfRes.json()
+                              setReceiptDsf(dsfData)
+                              setActiveTab('clientes')
+                              setMode('dsf_generated')
                             }}
                             className="px-2.5 py-1 text-[11px] font-medium rounded-lg bg-red-50 text-red-700 border border-red-200 hover:bg-red-100"
                           >

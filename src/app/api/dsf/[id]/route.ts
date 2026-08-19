@@ -17,7 +17,7 @@ export async function GET(
   const dsf = await prisma.dSF.findUnique({
     where: { id },
     include: {
-      cliente: { select: { nome: true, cpf: true, dataNascimento: true, telefone: true } },
+      cliente: { select: { nome: true, cpf: true, dataNascimento: true, telefone: true, email: true } },
       insumos: { select: { nomeProduto: true, lote: true, fabricante: true, validade: true } },
       responsavelTecnico: { select: { nome: true, crf: true } },
       tenant: { select: { nomeFantasia: true, cnpj: true, telefone: true, logoUrl: true, tipoImpressao: true } },
@@ -53,6 +53,7 @@ export async function GET(
     clienteCpf: dsf.cliente.cpf,
     clienteDataNasc: dsf.cliente.dataNascimento,
     clienteTelefone: dsf.cliente.telefone,
+    clienteEmail: dsf.cliente.email,
     insumos: dsf.insumos.map(i => ({
       nomeProduto: i.nomeProduto,
       lote: i.lote,
