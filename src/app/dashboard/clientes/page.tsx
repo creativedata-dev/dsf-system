@@ -1681,6 +1681,32 @@ export default function ClientesPage() {
                             Reabrir e Concluir
                           </button>
                         )}
+                        {dsf.status === 'CONCLUIDA' && !dsf.driveFileId && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const res = await fetch('/api/dsf/reabrir', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ dsfId: dsf.id }),
+                              })
+                              const data = await res.json()
+                              if (!res.ok) { alert(data.error ?? 'Erro'); return }
+                              setHistorico(prev => prev.map(d =>
+                                d.id === dsf.id ? { ...d, status: 'EMITIDA' } : d
+                              ))
+                              const dsfRes = await fetch(`/api/dsf/${dsf.id}`)
+                              const dsfData: ReceiptDsf = await dsfRes.json()
+                              setReceiptDsf(dsfData)
+                              setCapturedImage(null)
+                              setActiveTab('clientes')
+                              setMode('dsf_scanning')
+                            }}
+                            className="px-2.5 py-1 text-[11px] font-medium rounded-lg bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100"
+                          >
+                            Enviar para Drive
+                          </button>
+                        )}
                         {dsf.status === 'CONCLUIDA' && dsf.driveFileId && (
                           <a
                             href={`https://drive.google.com/file/d/${dsf.driveFileId}/view`}

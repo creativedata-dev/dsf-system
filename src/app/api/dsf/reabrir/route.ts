@@ -34,11 +34,11 @@ export async function POST(request: NextRequest) {
   if (!dsf || dsf.tenantId !== tenantId) {
     return Response.json({ error: 'DSF não encontrada' }, { status: 404 })
   }
-  if (dsf.status !== DsfStatus.CANCELADA) {
-    return Response.json({ error: 'Apenas DSFs canceladas podem ser reabertas' }, { status: 409 })
+  if (dsf.status === DsfStatus.EMITIDA) {
+    return Response.json({ error: 'DSF já está emitida' }, { status: 409 })
   }
 
-  // Remove a marcação de cancelamento das observações
+  // Remove a marcação de cancelamento das observações (se houver)
   const obsLimpa = (dsf.observacoes ?? '')
     .replace(/^\[CANCELADA[^\]]*\]\s*/i, '')
     .trim() || null
